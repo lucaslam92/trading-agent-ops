@@ -1,10 +1,10 @@
-# Quant Claw MVP Skeleton
+# Quant Claw MVP 工程骨架
 
-## 1. Purpose
+## 1. 文档目的
 
-This document maps the current repository into a practical MVP build skeleton so the project can move from concept review into implementation and extension.
+这份文档用于把当前仓库从“能看概念”转换成“能开工实现”的工程视角，明确现有结构分别承担什么职责，以及下一步应该补哪些骨架能力。
 
-## 2. Repository Layout
+## 2. 当前仓库结构
 
 ```text
 quant-claw/
@@ -29,30 +29,30 @@ quant-claw/
 └── README.md
 ```
 
-## 3. What Each Module Means
+## 3. 模块职责说明
 
 ### `configs/`
 
-Configuration surface for runtime mode, team composition, strategy parameters, and risk controls.
+配置层，负责 runtime mode、team 编排、strategy 参数、risk 限制等。
 
 ### `adapters/`
 
-External system boundaries.
+外部系统边界层。
 
-Current examples:
+当前示例：
 - `paper_broker.py`
 - `storage.py`
 
-Future examples:
-- exchange connectors
-- market data connectors
-- notification adapters
+后续可扩展为：
+- 交易所连接器
+- 市场数据连接器
+- 通知或告警适配器
 
 ### `agents/`
 
-Autonomous decision actors.
+决策型角色层。
 
-Current set:
+当前包括：
 - `base.py`
 - `quant.py`
 - `risk.py`
@@ -60,18 +60,18 @@ Current set:
 
 ### `events/`
 
-Transport layer abstraction.
+事件传输层。
 
-Current set:
+当前包括：
 - `bus.py`
 - `redis_bus.py`
 - `topics.py`
 
 ### `models/`
 
-Canonical business and transport schemas.
+核心业务模型和事件载荷模型。
 
-Current set includes:
+当前包括：
 - `event.py`
 - `market.py`
 - `proposal.py`
@@ -81,9 +81,9 @@ Current set includes:
 
 ### `services/`
 
-Process coordinators and side-effect executors.
+编排和副作用执行层。
 
-Current set includes:
+当前包括：
 - `orchestrator.py`
 - `execution_gateway.py`
 - `portfolio_engine.py`
@@ -93,73 +93,81 @@ Current set includes:
 
 ### `api/`
 
-Operational query and control API.
+查询和操作入口层。
 
 ### `apps/`
 
-App entrypoints such as demo runners.
+应用启动入口，例如 demo runner。
 
 ### `tests/simulation/`
 
-End-to-end validation of the simulated event loop.
+模拟环境下的端到端验证。
 
-## 4. Current Base Abstractions
+## 4. 当前基础抽象
 
-### Base Agent
+### BaseAgent
 
-`agents/base.py`
+位置：`agents/base.py`
 
-Provides:
+当前提供：
 - `agent_id`
-- bus / logger injection
-- common `emit()` helper
-- required `start()` lifecycle
+- bus / logger 注入
+- 统一 `emit()` 方法
+- 强制实现的 `start()` 生命周期入口
 
-This is the minimum reusable abstraction for all agents.
+这已经构成所有 Agent 的最小复用基类。
 
 ### Event Schema
 
-`models/event.py`
+位置：`models/event.py`
 
-Provides the system-wide envelope used by the bus.
+这是系统统一事件信封。
 
-### Strategy Contract
+### Strategy 接口
 
-Currently implicit in `StrategyProposal` plus the quant agent logic.
+当前还没有显式抽象出来，主要隐含在：
 
-Recommended next step:
-- introduce an explicit strategy interface, e.g. `strategies/base.py`
-- separate signal generation from proposal serialization
+- `StrategyProposal`
+- `ClawQuantAgent`
 
-### Risk Contract
+建议下一步补成独立接口，例如：
+- `strategies/base.py`
+- `strategies/funding_rate_arb.py`
 
-Currently implicit in `ClawRiskAgent` plus `RiskDecision`.
+把“信号生成”与“提案构建”分开。
 
-Recommended next step:
-- introduce pluggable risk policies
-- separate limit evaluation from event emission
+### Risk 接口
 
-### Execution Gateway Contract
+当前也仍然是隐式实现，主要体现在：
 
-Currently implemented by `services/execution_gateway.py` around `PaperBroker`.
+- `ClawRiskAgent`
+- `RiskDecision`
 
-Recommended next step:
-- formalize adapter interface for paper vs live broker implementations
+建议后续拆成：
+- 风控规则接口
+- 风控策略组合器
+- 风控结果标准化输出
 
-## 5. Example Runtime Path
+### Execution Gateway 接口
 
-Using current configs:
+当前由 `services/execution_gateway.py` + `PaperBroker` 共同承担。
+
+建议后续正式抽象 paper / live 两类 broker 接口边界。
+
+## 5. 当前示例 Team
+
+结合现有配置，当前可作为示例 team 的是：
 
 - runtime mode: `paper`
 - team: `btc-eth-focus`
 - strategy: `funding_rate_arb`
-- market symbols: `BTCUSDT`, `ETHUSDT`
+- symbols: `BTCUSDT`, `ETHUSDT`
 
-This gives a concrete example team setup for demo and early testing.
+这套配置很适合作为 demo、集成测试和最初 MVP 的默认运行样例。
 
-## 6. Recommended Next Skeleton Additions
+## 6. 建议补充的下一层骨架
 
-To make the MVP easier to extend, add these files next:
+为了让 MVP 更容易扩展，建议下一步新增如下结构：
 
 ```text
 src/quant_claw/
@@ -176,23 +184,23 @@ src/quant_claw/
     └── versions.py
 ```
 
-## 7. Suggested Build Order
+## 7. 建议开发顺序
 
-1. freeze event and domain schemas
-2. isolate strategy interface
-3. isolate risk policy interface
-4. formalize execution adapter interface
-5. expand simulation tests
-6. introduce backtest and paper/live environment switches
+1. 冻结 event 与核心 domain schema
+2. 抽离 strategy interface
+3. 抽离 risk policy interface
+4. 正式定义 execution adapter interface
+5. 扩充 simulation tests
+6. 增加 backtest / paper / live 环境切换
 
-## 8. Definition of a Useful MVP Repository
+## 8. 什么叫“够用的 MVP 仓库”
 
-This repository is MVP-ready when a new contributor can:
+当前阶段不需要追求“生产级全能”，而应该达到下面这个标准：
 
-- install dependencies
-- start local infra
-- run the demo flow
-- inspect generated positions and events
-- understand where strategy, risk, and execution code should evolve
+- 新成员能装好依赖
+- 能启动本地基础设施
+- 能跑通 demo flow
+- 能查看事件和持仓结果
+- 能看明白策略、风控、执行代码应该往哪里扩展
 
-That is the right bar for the current stage: not “full production”, but “clear enough to build on without guessing.”
+只要做到这一点，这个仓库就已经是一个**真正能开工**的 MVP 仓库，而不是停留在 PPT 或蓝图层面。

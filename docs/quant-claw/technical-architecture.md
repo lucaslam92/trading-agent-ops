@@ -1,56 +1,56 @@
-# Quant Claw Technical Architecture
+# Quant Claw 技术架构
 
-## 1. Architecture Summary
+## 1. 架构概览
 
-`quant-claw` is structured as an event-driven multi-agent system. The core design principle is separation of concern by decision stage rather than by monolithic service.
+`quant-claw` 当前采用的是**事件驱动、多 Agent 协同**的结构。核心设计思想不是把所有逻辑堆进一个大服务，而是按决策阶段拆分职责。
 
-Main layers:
+主要层次包括：
 
-- `agents/`: decision-making actors
-- `services/`: orchestration, execution, portfolio, persistence
-- `events/`: bus abstraction and topic registry
-- `models/`: canonical payload models
-- `configs/`: runtime, strategy, risk, and team configuration
-- `api/`: operational read/query and simulation trigger endpoints
+- `agents/`：负责决策与动作触发
+- `services/`：负责编排、执行、持仓、持久化等服务能力
+- `events/`：负责事件总线抽象与 topic 定义
+- `models/`：负责统一的数据结构与载荷模型
+- `configs/`：负责 runtime、strategy、risk、team 配置
+- `api/`：负责查询接口与模拟触发入口
 
-## 2. Current Service Breakdown
+## 2. 当前服务拆分
 
 ### Agents
 
 - `ClawQuantAgent`
-  - subscribes to `market.funding.updated`
-  - emits `strategy.proposal.created`
+  - 订阅 `market.funding.updated`
+  - 输出 `strategy.proposal.created`
 
 - `ClawRiskAgent`
-  - subscribes to `strategy.proposal.created`
-  - emits `risk.check.approved` or `risk.check.rejected`
+  - 订阅 `strategy.proposal.created`
+  - 输出 `risk.check.approved` 或 `risk.check.rejected`
 
 - `ClawTraderAgent`
-  - subscribes to `risk.check.approved`
-  - emits `execution.order.requested`
+  - 订阅 `risk.check.approved`
+  - 输出 `execution.order.requested`
 
 ### Services
 
 - `Orchestrator`
-  - instantiates agents
-  - registers subscriptions
-  - connects persistence hooks and services
+  - 实例化各 Agent
+  - 注册订阅关系
+  - 连接持久化和其他服务钩子
 
 - `ExecutionGateway`
-  - subscribes to execution requests via orchestrator wiring
-  - calls `PaperBroker`
-  - emits `execution.order.filled`
+  - 处理执行请求
+  - 调用 `PaperBroker`
+  - 输出 `execution.order.filled`
 
 - `PortfolioEngine`
-  - subscribes to `execution.order.filled`
-  - emits `portfolio.position.updated`
+  - 处理成交事件
+  - 输出 `portfolio.position.updated`
 
 - `PersistenceService`
-  - stores events and business entities
+  - 保存事件与业务实体
 
-## 3. Event Topics
+## 3. Topic 设计
 
-Current implemented topics:
+当前已实现的 topics 包括：
 
 - `market.funding.updated`
 - `strategy.proposal.created`
@@ -60,7 +60,7 @@ Current implemented topics:
 - `execution.order.filled`
 - `portfolio.position.updated`
 
-## 4. Event Flow
+## 4. 事件流
 
 ```text
 MarketDataService / simulator
@@ -77,7 +77,7 @@ MarketDataService / simulator
                                             -> portfolio.position.updated
 ```
 
-Rejected branch:
+拒绝分支如下：
 
 ```text
 strategy.proposal.created
@@ -85,11 +85,11 @@ strategy.proposal.created
         -> risk.check.rejected
 ```
 
-## 5. Canonical Models
+## 5. 数据模型
 
 ### Event
 
-Base transport envelope:
+这是系统统一的事件信封，字段包括：
 
 - `event_id`
 - `topic`
@@ -97,13 +97,11 @@ Base transport envelope:
 - `source`
 - `payload`
 
-This is the common wrapper for all inter-agent communication.
+所有 Agent 间通信都通过这个包裹结构传递。
 
 ### StrategyProposal
 
-Purpose: describe a strategy-originated executable idea before risk approval.
-
-Main fields:
+用于表达一个“尚未进入执行”的策略提案。主要字段包括：
 
 - `proposal_id`
 - `signal_id`
@@ -120,9 +118,7 @@ Main fields:
 
 ### RiskDecision
 
-Purpose: convert a proposal into a governed approval decision.
-
-Main fields:
+用于把提案转化为正式风控决策。主要字段包括：
 
 - `decision_id`
 - `proposal_id`
@@ -135,9 +131,7 @@ Main fields:
 
 ### ExecutionOrder
 
-Purpose: concrete order request generated from an approved decision.
-
-Main fields:
+用于表达最终执行请求。主要字段包括：
 
 - `order_request_id`
 - `proposal_id`
@@ -153,118 +147,114 @@ Main fields:
 - `status`
 - `ts`
 
-## 6. Config Topology
+## 6. 配置结构
 
-### Base runtime config
+### 基础运行配置
 
 `configs/base.yaml`
 
-Defines:
-- app metadata
+定义：
+- 应用名称与环境
 - runtime mode
-- default team
+- 默认 team
 - bus backend
 - database URL
 - logging level
 
-### Team config
+### Team 配置
 
 `configs/teams/btc-eth-focus.yaml`
 
-Defines:
+定义：
 - team id / name
 - market
 - symbols
 - enabled agents
 - enabled strategies
 
-### Risk / strategy configs
+### 风控 / 策略配置
 
-Located under:
+位于：
 - `configs/risk/`
 - `configs/strategies/`
 
-These should become the main knobs for rollout without code changes.
+这些目录后续应该成为“通过配置扩展系统”的主入口。
 
-## 7. Environment Isolation
-
-Recommended environment model:
+## 7. 环境隔离建议
 
 ### Backtest
 
-- offline historical data
-- deterministic replay
-- no real broker adapter
-- full event capture for reproducibility
+- 使用历史数据离线回放
+- 强调可重复性
+- 不接真实 broker
+- 需要完整事件记录能力
 
 ### Simulation / Demo
 
-- synthetic or replayed market events
-- paper broker execution
-- local Redis/Postgres optional
-- used for integration verification
+- 使用模拟或回放市场事件
+- 使用 paper broker 执行
+- 本地 Redis / Postgres 可选
+- 用于集成验证
 
 ### Paper Trading
 
-- real market feed
-- fake capital / no real order submission
-- production-like controls and observability
+- 使用真实市场数据
+- 不动真资金
+- 但尽量保留生产形态的风控与观测能力
 
 ### Live Trading
 
-- real exchange adapters
-- stricter risk, kill switch, operator approval, audit
+- 接真实交易所适配器
+- 加强风控、熔断、审批、审计
 
-## 8. Topic Naming Guidance
+## 8. Topic 命名建议
 
-Current topic style is good and should be preserved:
+当前 topic 风格是对的，建议保持：
 
 `domain.entity.action`
 
-Examples:
+例如：
 - `market.funding.updated`
 - `strategy.proposal.created`
 - `execution.order.filled`
 
-Suggested additions should follow the same convention, e.g.:
+后续新增 topic 也建议遵循同样风格，例如：
 - `market.price.tick`
 - `risk.limit.triggered`
 - `execution.order.cancel_requested`
 - `portfolio.pnl.updated`
 
-## 9. Schema Governance Guidance
+## 9. Schema 治理建议
 
-To prevent drift as the system grows:
+随着系统变大，为避免契约漂移，建议：
 
-- keep Pydantic models as canonical contracts
-- avoid anonymous dict payloads outside envelope construction boundaries
-- version schemas when breaking changes appear
-- require replay tests when schema or topic semantics change
+- 使用 Pydantic model 作为唯一可信契约
+- 避免在边界之外大量传裸 dict
+- 有破坏性修改时做版本化
+- 每次 schema 变化都配套 replay / simulation 测试
 
-## 10. Deployment Topology
+## 10. 部署拓扑
 
-Current local topology:
+当前本地运行形态：
 
-- app runtime in Python
-- Redis for bus backend
-- Postgres for persistence
-- FastAPI for operational endpoints
+- Python 应用进程
+- Redis 作为事件总线候选
+- Postgres 作为持久化存储
+- FastAPI 提供查询 / 操作接口
 
-Suggested production-shaped topology later:
+后续更像生产的部署形态建议为：
 
-- agent runtime container(s)
-- Redis / stream backbone
-- Postgres primary store
-- metrics / logs sink
-- operator dashboard / admin API
+- Agent runtime 容器
+- Redis / Stream 作为消息主干
+- Postgres 主存储
+- 日志 / 指标系统
+- 运维控制台或管理 API
 
-## 11. Gaps to Close Next
+## 11. 当前待补齐的高优先级缺口
 
-Highest-value architecture gaps:
-
-1. explicit market data service contract
-2. richer order lifecycle states
-3. replay / idempotency strategy
-4. formal API contract documentation
-5. live-mode exchange adapter boundary
-6. team-level and account-level risk aggregation
+1. 明确 market data service 契约
+2. 扩展订单生命周期状态机
+3. 增加 replay / 幂等处理策略
+4. 输出更正式的 API 文档
+5. 抽象 live mode 交易所适配边界
+6. 增加 team 级 / account 级风险聚合能力
