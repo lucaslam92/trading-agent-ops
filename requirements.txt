@@ -4,12 +4,12 @@
 vnpy>=3.9.0
 vnpy_ctastrategy>=3.9.0
 
-# 交易所接入（根据实际使用的交易所选择）
-# vnpy_binance>=1.0.0    # Binance 现货/合约
+# 数据存储（回测必须，二选一）
+vnpy_sqlite>=1.0.0       # 轻量本地数据库（回测 / 开发，默认使用此项）
+# vnpy_mongodb>=1.0.0    # MongoDB（生产推荐，数据量大时切换）
 
-# 数据存储（二选一）
-# vnpy_sqlite>=1.0.0     # 轻量本地数据库（回测 / 开发）
-# vnpy_mongodb>=1.0.0    # MongoDB（生产推荐）
+# 交易所接入（模拟盘/实盘才需要）
+# vnpy_binance>=1.0.0    # Binance 现货/合约
 
 # 可选：后续接入机器学习模型时使用
 # lightgbm>=4.0.0

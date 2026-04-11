@@ -16,7 +16,7 @@ import argparse
 import json
 import logging
 import sys
-from datetime import datetime
+from datetime import datetime, date
 from pathlib import Path
 
 # 确保项目根目录在 PYTHONPATH
@@ -74,8 +74,8 @@ def run(config_path: str = "configs/backtest_config.json") -> None:
     engine.set_parameters(
         vt_symbol=f"{cfg['symbol']}.{cfg['exchange']}",
         interval=Interval(cfg["interval"]),
-        start=datetime.fromisoformat(cfg["start"]),
-        end=datetime.fromisoformat(cfg["end"]),
+        start=_parse_dt(cfg["start"]),
+        end=_parse_dt(cfg["end"]),
         rate=cfg.get("rate", 0.0005),
         slippage=cfg.get("slippage", 10.0),
         size=cfg.get("size", 1),
@@ -100,7 +100,25 @@ def run(config_path: str = "configs/backtest_config.json") -> None:
     for k, v in stats.items():
         logger.info("  %s: %s", k, v)
 
-    engine.show_chart()
+    # 保存每日 PnL 曲线到 CSV（供后续分析）
+    if df is not None and not df.empty:
+        out_csv = ROOT / "logs" / f"backtest_{cfg['strategy']}_{cfg['start']}_{cfg['end']}.csv"
+        df.to_csv(out_csv)
+        logger.info("每日净值已保存: %s", out_csv)
+
+    # 尝试显示图表（无头环境下跳过）
+    try:
+        engine.show_chart()
+    except Exception as e:
+        logger.info("show_chart 跳过（无头环境）: %s", e)
+
+
+def _parse_dt(s: str) -> datetime:
+    """兼容 'YYYY-MM-DD' 和 'YYYY-MM-DDTHH:MM:SS' 两种格式。"""
+    try:
+        return datetime.fromisoformat(s)
+    except ValueError:
+        return datetime.combine(date.fromisoformat(s), datetime.min.time())
 
 
 def _init_ai_config() -> None:
