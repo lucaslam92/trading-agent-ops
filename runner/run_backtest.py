@@ -24,7 +24,7 @@ ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
 from vnpy.trader.constant import Exchange, Interval
-from vnpy_ctastrategy.backtesting import BacktestingEngine, OptimizationSetting
+from vnpy_ctastrategy.backtesting import BacktestingEngine
 
 from ai.regime_detector import RegimeDetector
 from ai.strategy_router import StrategyRouter

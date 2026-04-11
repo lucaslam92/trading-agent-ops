@@ -21,9 +21,9 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from vnpy.app.cta_strategy import CtaTemplate, StopOrder
+from vnpy_ctastrategy import CtaTemplate, StopOrder
 from vnpy.trader.object import BarData, TickData, TradeData, OrderData
-from vnpy.trader.constant import Direction
+from vnpy.trader.constant import Direction, Offset
 
 logger = logging.getLogger(__name__)
 
@@ -87,14 +87,14 @@ class AdaptiveCtaTemplate(CtaTemplate, ABC):
         # 1. 读取最新 AI 配置（版本变化时刷新参数）
         self._refresh_config()
 
-        # 2. 风控前置检查
-        if not self._risk_allow_open():
-            return
-
-        # 3. 子类计算信号
+        # 2. 始终执行子类信号计算（含止损/止盈平仓逻辑）
         signal = self._calc_signal(bar)
 
-        # 4. 执行交易
+        # 3. 风控检查：仅限制开仓，不阻止平仓
+        if signal in ("long", "short") and not self._risk_allow_open():
+            return
+
+        # 4. 执行开仓
         if signal == "long":
             self._open_long(bar)
         elif signal == "short":
@@ -105,16 +105,28 @@ class AdaptiveCtaTemplate(CtaTemplate, ABC):
 
     def on_trade(self, trade: TradeData) -> None:
         """成交回调：更新日内 PnL 和连续亏损计数。"""
+        # 开仓时记录入场价，不计 PnL
+        if trade.offset == Offset.OPEN:
+            self._entry_price = trade.price
+            return
+
+        # 平仓时计算 PnL
+        if not hasattr(self, "_entry_price") or self._entry_price == 0:
+            return
+
         if trade.direction == Direction.LONG:
-            pnl = (trade.price - self._entry_price) * trade.volume if hasattr(self, "_entry_price") else 0
+            # 平空（cover）：买入价 < 入场空单价 才盈利
+            pnl = (self._entry_price - trade.price) * trade.volume
         else:
-            pnl = (self._entry_price - trade.price) * trade.volume if hasattr(self, "_entry_price") else 0
+            # 平多（sell）：卖出价 > 入场多单价 才盈利
+            pnl = (trade.price - self._entry_price) * trade.volume
 
         self._daily_pnl += pnl
         if pnl < 0:
             self._consecutive_loss += 1
         else:
             self._consecutive_loss = 0
+        self._entry_price = 0.0
 
     def on_stop_order(self, stop_order: StopOrder) -> None:
         pass
@@ -167,9 +179,11 @@ class AdaptiveCtaTemplate(CtaTemplate, ABC):
 
     def _risk_allow_open(self) -> bool:
         """返回 False 则当前 bar 不允许开仓。"""
-        # 单日亏损超限
-        if self._daily_pnl < -self._daily_loss_limit:
-            self.write_log(f"风控触发: 单日亏损 {self._daily_pnl:.4f} 超过限额")
+        # 单日亏损超限：用绝对金额与资本比例比较
+        capital = self._get_capital()
+        loss_limit = capital * self._daily_loss_limit if capital > 0 else float("inf")
+        if self._daily_pnl < -loss_limit:
+            self.write_log(f"风控触发: 单日亏损 {self._daily_pnl:.2f} 超过限额 {loss_limit:.2f}")
             return False
         # 连续亏损超限（5 次）
         if self._consecutive_loss >= 5:
@@ -178,14 +192,36 @@ class AdaptiveCtaTemplate(CtaTemplate, ABC):
         return True
 
     def _calc_lot(self, price: float) -> int:
-        """根据 max_position_pct 计算开仓手数（最小 1 手）。"""
+        """
+        根据 max_position_pct 计算开仓手数（最小 1 手）。
+
+        资金获取策略：
+        - 回测模式：从 BacktestingEngine.capital 读取
+        - 实盘/模拟盘：从 OMS 账户余额读取，失败则返回 1 手
+        """
         if price <= 0:
             return 1
-        capital = self.cta_engine.get_pnl_daily()  # 可用资金（近似）
-        if capital is None or capital <= 0:
+
+        capital = self._get_capital()
+        if capital <= 0:
             return 1
+
         lot = max(1, int(capital * self._max_position_pct / price))
         return lot
+
+    def _get_capital(self) -> float:
+        """获取可用资金。兼容回测和实盘两种模式。"""
+        # 回测模式：BacktestingEngine 有 capital 属性
+        if hasattr(self.cta_engine, "capital"):
+            return float(self.cta_engine.capital)
+        # 实盘/模拟盘：从账户余额查询
+        try:
+            accounts = self.cta_engine.main_engine.get_all_accounts()
+            if accounts:
+                return float(accounts[0].available)
+        except Exception:
+            pass
+        return 0.0
 
     # ------------------------------------------------------------------
     # 下单辅助

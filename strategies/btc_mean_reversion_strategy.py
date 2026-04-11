@@ -144,5 +144,5 @@ class BtcMeanReversionStrategy(AdaptiveCtaTemplate):
     # Tick（不使用，保留接口）
     # ------------------------------------------------------------------
 
-    def on_tick(self, tick: BarData) -> None:
+    def on_tick(self, tick: TickData) -> None:
         pass

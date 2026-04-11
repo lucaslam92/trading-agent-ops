@@ -16,7 +16,7 @@ from datetime import datetime
 from typing import List, Optional
 
 from vnpy.trader.constant import Exchange, Interval
-from vnpy.trader.database import database_manager
+from vnpy.trader.database import get_database
 from vnpy.trader.object import BarData
 
 from ai.regime_detector import BarFeature
@@ -77,7 +77,8 @@ class MarketDataService:
     ) -> List[BarData]:
         """从 vn.py 数据库加载历史 K 线。"""
         try:
-            bars = database_manager.load_bar_data(
+            database = get_database()
+            bars = database.load_bar_data(
                 symbol=symbol,
                 exchange=exchange,
                 interval=interval,

@@ -14,8 +14,7 @@ BTC 趋势跟随策略。
 
 from typing import Any, Dict, Optional
 
-from vnpy.app.cta_strategy import StopOrder
-from vnpy.trader.object import BarData, TickData, TradeData, OrderData, ArrayManager
+from vnpy.trader.object import BarData, TickData
 from vnpy.trader.utility import ArrayManager
 
 from strategies.adaptive_cta_template import AdaptiveCtaTemplate
