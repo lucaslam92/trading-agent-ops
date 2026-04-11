@@ -48,8 +48,14 @@ logging.basicConfig(
 )
 logger = logging.getLogger("run_live")
 
-_EXCHANGE_MAP = {"BINANCE": Exchange.BINANCE}
-_INTERVAL_MAP = {"1h": Interval.HOUR, "15m": Interval.MINUTE_15, "1d": Interval.DAILY}
+_EXCHANGE_MAP = {
+    "OKX": Exchange.OKX,
+}
+_INTERVAL_MAP = {
+    "1m": Interval.MINUTE, "5m": Interval.MINUTE_5, "15m": Interval.MINUTE_15,
+    "30m": Interval.MINUTE_30, "1h": Interval.HOUR, "4h": Interval.HOUR_4,
+    "1d": Interval.DAILY,
+}
 
 
 def run(config_path: str = "configs/live_config.json", skip_confirm: bool = False) -> None:
@@ -86,19 +92,15 @@ def run(config_path: str = "configs/live_config.json", skip_confirm: bool = Fals
         daily_loss_limit=risk_cfg.get("daily_loss_limit", 0.03),
     )
 
-    logger.warning("=== BTC 实盘启动 ===")
+    logger.warning("=== BTC OKX 实盘启动 ===")
+    logger.warning("品种: %s  周期: %s", cfg["symbol"], cfg["interval"])
 
     # --- 启动 vn.py 主引擎 ---
     event_engine = EventEngine()
     main_engine = MainEngine(event_engine)
 
-    # TODO: 配置 Gateway（需要 API Key / Secret）
-    # from vnpy_binance import BinanceSpotGateway
-    # main_engine.add_gateway(BinanceSpotGateway)
-    # main_engine.connect(
-    #     setting={"key": "YOUR_API_KEY", "secret": "YOUR_API_SECRET"},
-    #     gateway_name="BINANCE",
-    # )
+    # --- 连接 OKX Gateway（实盘，server=REAL）---
+    _connect_okx_gateway(main_engine, server=cfg.get("server", "REAL"))
 
     cta_engine: CtaEngine = main_engine.add_app(CtaStrategyApp)
     _load_strategy(cta_engine, cfg)
@@ -174,8 +176,55 @@ def _start_ai_thread(
     return t
 
 
+def _connect_okx_gateway(main_engine, server: str = "REAL") -> None:
+    """
+    加载并连接 OKX Gateway（实盘）。
+
+    从环境变量读取凭证：
+        OKX_API_KEY      - API Key
+        OKX_SECRET_KEY   - Secret Key
+        OKX_PASSPHRASE   - Passphrase
+
+    server="REAL" 为实盘，server="TEST" 为模拟盘。
+    """
+    import os
+    try:
+        from vnpy_okx import OkxGateway
+    except ImportError:
+        logger.error("vnpy_okx 未安装，请运行: pip install vnpy_okx")
+        return
+
+    api_key    = os.environ.get("OKX_API_KEY", "")
+    secret_key = os.environ.get("OKX_SECRET_KEY", "")
+    passphrase = os.environ.get("OKX_PASSPHRASE", "")
+
+    if not all([api_key, secret_key, passphrase]):
+        logger.error(
+            "OKX 凭证未配置！请设置环境变量:\n"
+            "  export OKX_API_KEY=your_key\n"
+            "  export OKX_SECRET_KEY=your_secret\n"
+            "  export OKX_PASSPHRASE=your_passphrase"
+        )
+        raise RuntimeError("OKX 凭证未配置，实盘无法启动")
+
+    main_engine.add_gateway(OkxGateway)
+    main_engine.connect(
+        setting={
+            "API Key":    api_key,
+            "Secret Key": secret_key,
+            "Passphrase": passphrase,
+            "Server":     server,
+            "Proxy Host": os.environ.get("PROXY_HOST", ""),
+            "Proxy Port": int(os.environ.get("PROXY_PORT", 0)),
+        },
+        gateway_name="OKX",
+    )
+    logger.warning("OKX Gateway 已连接 (server=%s)", server)
+
+
 def _bar_to_seconds(interval_str: str) -> int:
-    mapping = {"1m": 60, "5m": 300, "15m": 900, "30m": 1800, "1h": 3600, "4h": 14400, "1d": 86400}
+    mapping = {"1m": 60, "5m": 300, "15m": 900, "30m": 1800,
+               "1h": 3600, "4h": 14400, "1d": 86400}
     return mapping.get(interval_str, 3600)
 
 

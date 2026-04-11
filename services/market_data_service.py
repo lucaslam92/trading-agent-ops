@@ -30,7 +30,7 @@ class MarketDataService:
 
     调用方式：
         svc = MarketDataService()
-        bars = svc.get_bar_features("BTCUSDT", Exchange.BINANCE, Interval.HOUR, count=100)
+        bars = svc.get_bar_features("BTC-USDT-SWAP", Exchange.OKX, Interval.HOUR, count=100)
     """
 
     def get_bar_features(
@@ -47,7 +47,7 @@ class MarketDataService:
         Parameters
         ----------
         symbol   : 合约代码，如 "BTCUSDT"
-        exchange : 交易所，如 Exchange.BINANCE
+        exchange : 交易所，如 Exchange.OKX
         interval : K 线周期，如 Interval.HOUR
         count    : 获取根数
         end      : 截止时间，默认为当前时间

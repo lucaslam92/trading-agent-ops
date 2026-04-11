@@ -38,6 +38,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger("run_backtest")
 
+_EXCHANGE_MAP = {
+    "OKX": Exchange.OKX,
+}
+
 _STRATEGY_MAP = {
     "BtcTrendStrategy": "strategies.btc_trend_strategy.BtcTrendStrategy",
     "BtcMeanReversionStrategy": "strategies.btc_mean_reversion_strategy.BtcMeanReversionStrategy",
@@ -71,6 +75,7 @@ def run(config_path: str = "configs/backtest_config.json") -> None:
 
     # --- 4. 构建 BacktestingEngine ---
     engine = BacktestingEngine()
+    exchange = _EXCHANGE_MAP.get(cfg["exchange"], Exchange.OKX)
     engine.set_parameters(
         vt_symbol=f"{cfg['symbol']}.{cfg['exchange']}",
         interval=Interval(cfg["interval"]),

@@ -42,8 +42,14 @@ logging.basicConfig(
 )
 logger = logging.getLogger("run_paper")
 
-_EXCHANGE_MAP = {"BINANCE": Exchange.BINANCE}
-_INTERVAL_MAP = {"1h": Interval.HOUR, "15m": Interval.MINUTE_15, "1d": Interval.DAILY}
+_EXCHANGE_MAP = {
+    "OKX": Exchange.OKX,
+}
+_INTERVAL_MAP = {
+    "1m": Interval.MINUTE, "5m": Interval.MINUTE_5, "15m": Interval.MINUTE_15,
+    "30m": Interval.MINUTE_30, "1h": Interval.HOUR, "4h": Interval.HOUR_4,
+    "1d": Interval.DAILY,
+}
 
 
 def run(config_path: str = "configs/paper_config.json") -> None:
@@ -61,14 +67,18 @@ def run(config_path: str = "configs/paper_config.json") -> None:
     update_interval_bars = ai_cfg.get("update_interval_bars", 4)
     lookback_bars = ai_cfg.get("lookback_bars", 100)
 
-    logger.info("=== BTC 模拟盘启动 ===")
+    logger.info("=== BTC OKX 模拟盘启动 ===")
+    logger.info("品种: %s  周期: %s  服务器: %s", symbol, cfg["interval"],
+                cfg.get("server", "TEST"))
 
     # --- 1. 启动 vn.py 主引擎 ---
     event_engine = EventEngine()
     main_engine = MainEngine(event_engine)
 
-    # 根据配置动态加载 Gateway（此处仅为示意，实盘需配置 API Key）
-    # main_engine.add_gateway(BinanceGateway)  # 取消注释并配置 key/secret
+    # --- 2. 加载 OKX Gateway ---
+    # OKX 模拟盘使用官方模拟交易环境（server=TEST），需要模拟盘专用 API Key
+    # 模拟盘 Key 申请：OKX App -> 交易 -> 模拟交易 -> API
+    _connect_okx_gateway(main_engine, server=cfg.get("server", "TEST"))
 
     cta_engine: CtaEngine = main_engine.add_app(CtaStrategyApp)
 
@@ -154,21 +164,63 @@ def _start_ai_thread(
     return t
 
 
+def _connect_okx_gateway(main_engine, server: str = "TEST") -> None:
+    """
+    加载并连接 OKX Gateway。
+
+    API 凭证从环境变量读取（避免明文写入代码）：
+        OKX_API_KEY      - API Key
+        OKX_SECRET_KEY   - Secret Key
+        OKX_PASSPHRASE   - Passphrase（OKX 特有，申请 Key 时设置）
+
+    模拟盘 server="TEST"，实盘 server="REAL"。
+    """
+    import os
+    try:
+        from vnpy_okx import OkxGateway
+    except ImportError:
+        logger.error("vnpy_okx 未安装，请运行: pip install vnpy_okx")
+        return
+
+    api_key    = os.environ.get("OKX_API_KEY", "")
+    secret_key = os.environ.get("OKX_SECRET_KEY", "")
+    passphrase = os.environ.get("OKX_PASSPHRASE", "")
+
+    if not all([api_key, secret_key, passphrase]):
+        logger.warning(
+            "OKX 凭证未设置，Gateway 将以无认证模式运行（仅行情，无法下单）\n"
+            "请设置环境变量: OKX_API_KEY / OKX_SECRET_KEY / OKX_PASSPHRASE"
+        )
+
+    main_engine.add_gateway(OkxGateway)
+    main_engine.connect(
+        setting={
+            "API Key":    api_key,
+            "Secret Key": secret_key,
+            "Passphrase": passphrase,
+            "Server":     server,       # "TEST" = 模拟盘, "REAL" = 实盘
+            "Proxy Host": os.environ.get("PROXY_HOST", ""),
+            "Proxy Port": int(os.environ.get("PROXY_PORT", 0)),
+        },
+        gateway_name="OKX",
+    )
+    logger.info("OKX Gateway 已连接 (server=%s)", server)
+
+
 def _bar_to_seconds(interval_str: str) -> int:
-    """将 K 线周期字符串转为秒数。"""
-    mapping = {"1m": 60, "5m": 300, "15m": 900, "30m": 1800, "1h": 3600, "4h": 14400, "1d": 86400}
+    mapping = {"1m": 60, "5m": 300, "15m": 900, "30m": 1800,
+               "1h": 3600, "4h": 14400, "1d": 86400}
     return mapping.get(interval_str, 3600)
 
 
 def _camel_to_snake(name: str) -> str:
-    """BtcTrendStrategy -> btc_trend_strategy"""
     import re
     s1 = re.sub(r"(.)([A-Z][a-z]+)", r"\1_\2", name)
     return re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", s1).lower()
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="BTC CTA 模拟盘")
+    parser = argparse.ArgumentParser(description="BTC CTA OKX 模拟盘")
     parser.add_argument("--config", default="configs/paper_config.json")
     args = parser.parse_args()
     run(args.config)

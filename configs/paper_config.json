@@ -1,9 +1,10 @@
 {
   "mode": "paper",
-  "symbol": "BTCUSDT",
-  "exchange": "BINANCE",
+  "symbol": "BTC-USDT-SWAP",
+  "exchange": "OKX",
   "interval": "1h",
-  "gateway": "BINANCE",
+  "gateway": "OKX",
+  "server": "TEST",
   "log_level": "INFO",
   "strategy": "BtcTrendStrategy",
   "strategy_setting": {

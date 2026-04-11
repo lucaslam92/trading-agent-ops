@@ -9,7 +9,7 @@ vnpy_sqlite>=1.0.0       # 轻量本地数据库（回测 / 开发，默认使�
 # vnpy_mongodb>=1.0.0    # MongoDB（生产推荐，数据量大时切换）
 
 # 交易所接入（模拟盘/实盘才需要）
-# vnpy_binance>=1.0.0    # Binance 现货/合约
+vnpy_okx>=1.0.0          # OKX 现货 + 永续合约
 
 # 可选：后续接入机器学习模型时使用
 # lightgbm>=4.0.0
