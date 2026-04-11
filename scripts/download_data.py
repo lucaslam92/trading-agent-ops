@@ -117,6 +117,10 @@ def main() -> None:
         logger.error("依赖缺失：%s\n请运行：pip install vnpy vnpy_ctastrategy vnpy_sqlite", e)
         sys.exit(1)
 
+    # 兼容不同 vn.py 版本：部分版本没有 Exchange.OKX，退化为 LOCAL 存储标识。
+    if not hasattr(Exchange, "OKX"):
+        Exchange.OKX = Exchange.LOCAL
+
     db = get_database()
     exchange = Exchange.OKX
     interval = Interval(args.interval)

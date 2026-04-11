@@ -53,14 +53,14 @@ class BtcMeanReversionStrategy(AdaptiveCtaTemplate):
     ]
 
     def __init__(self, cta_engine, strategy_name: str, vt_symbol: str, setting: dict) -> None:
-        super().__init__(cta_engine, strategy_name, vt_symbol, setting)
-
-        # 策略参数（安全默认值）
+        # 先设置默认值，再让 vn.py 用 setting 覆盖，避免外部参数被默认值反向覆盖。
         self.rsi_window: int = 14
         self.rsi_long_threshold: float = 30.0
         self.rsi_short_threshold: float = 70.0
         self.boll_window: int = 20
         self.boll_dev: float = 2.0
+
+        super().__init__(cta_engine, strategy_name, vt_symbol, setting)
 
         # 指标输出（用于界面显示）
         self.rsi_value: float = 50.0
@@ -103,7 +103,8 @@ class BtcMeanReversionStrategy(AdaptiveCtaTemplate):
             return None
 
         self.rsi_value = am.rsi(self.rsi_window)
-        upper, self.boll_mid, lower = am.boll(self.boll_window, self.boll_dev)
+        upper, lower = am.boll(self.boll_window, self.boll_dev)
+        self.boll_mid = am.sma(self.boll_window)
         self.boll_upper = upper
         self.boll_lower = lower
 

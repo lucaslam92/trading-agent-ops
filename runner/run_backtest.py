@@ -26,6 +26,10 @@ sys.path.insert(0, str(ROOT))
 from vnpy.trader.constant import Exchange, Interval
 from vnpy_ctastrategy.backtesting import BacktestingEngine
 
+# 兼容不同 vn.py 版本：部分版本没有 Exchange.OKX，回测链路退化为 LOCAL 存储标识。
+if not hasattr(Exchange, "OKX"):
+    Exchange.OKX = Exchange.LOCAL
+
 from ai.regime_detector import RegimeDetector
 from ai.strategy_router import StrategyRouter
 from ai.parameter_provider import ParameterProvider
@@ -45,6 +49,7 @@ _EXCHANGE_MAP = {
 _STRATEGY_MAP = {
     "BtcTrendStrategy": "strategies.btc_trend_strategy.BtcTrendStrategy",
     "BtcMeanReversionStrategy": "strategies.btc_mean_reversion_strategy.BtcMeanReversionStrategy",
+    "BtcDonchianBreakoutStrategy": "strategies.btc_donchian_breakout_strategy.BtcDonchianBreakoutStrategy",
 }
 
 

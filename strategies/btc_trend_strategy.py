@@ -52,13 +52,13 @@ class BtcTrendStrategy(AdaptiveCtaTemplate):
     ]
 
     def __init__(self, cta_engine, strategy_name: str, vt_symbol: str, setting: dict) -> None:
-        super().__init__(cta_engine, strategy_name, vt_symbol, setting)
-
-        # 策略参数（安全默认值）
+        # 先设置默认值，再让 vn.py 用 setting 覆盖，避免外部参数被默认值反向覆盖。
         self.fast_window: int = 10
         self.slow_window: int = 30
         self.atr_window: int = 14
         self.atr_multiplier: float = 1.5
+
+        super().__init__(cta_engine, strategy_name, vt_symbol, setting)
 
         # 指标输出（用于界面显示）
         self.fast_ma: float = 0.0
@@ -70,6 +70,7 @@ class BtcTrendStrategy(AdaptiveCtaTemplate):
 
         # K 线数组管理器
         self._am = ArrayManager(size=max(self.slow_window, self.atr_window) + 10)
+        self._debug_logged = False
 
     # ------------------------------------------------------------------
     # 实现基类接口
@@ -101,6 +102,12 @@ class BtcTrendStrategy(AdaptiveCtaTemplate):
 
         if not am.inited:
             return None
+
+        if not self._debug_logged:
+            print(
+                f"DEBUG trend params: fast={self.fast_window} slow={self.slow_window} atr_window={self.atr_window} atr_multiplier={self.atr_multiplier} stop_loss_pct={self._stop_loss_pct}"
+            )
+            self._debug_logged = True
 
         fast_ma_array = am.sma(self.fast_window, array=True)
         slow_ma_array = am.sma(self.slow_window, array=True)

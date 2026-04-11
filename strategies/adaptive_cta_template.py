@@ -28,6 +28,7 @@ from vnpy.trader.constant import Direction, Offset
 logger = logging.getLogger(__name__)
 
 _RUNTIME_CONFIG_PATH = Path(__file__).parent.parent / "configs" / "strategy_runtime.json"
+_BACKTEST_RUNTIME_DISABLED = False
 
 
 class AdaptiveCtaTemplate(CtaTemplate, ABC):
@@ -47,6 +48,7 @@ class AdaptiveCtaTemplate(CtaTemplate, ABC):
     variables = ["_config_version", "_daily_pnl", "_consecutive_loss"]
 
     def __init__(self, cta_engine, strategy_name: str, vt_symbol: str, setting: dict) -> None:
+        self._raw_setting: Dict[str, Any] = dict(setting or {})
         super().__init__(cta_engine, strategy_name, vt_symbol, setting)
 
         # 配置版本追踪（用于检测文件变化）
@@ -61,6 +63,12 @@ class AdaptiveCtaTemplate(CtaTemplate, ABC):
         self._stop_loss_pct: float = 0.015
         self._take_profit_pct: float = 0.030
         self._daily_loss_limit: float = 0.05   # 5% 净值单日最大亏损
+
+        # 现实摩擦参数（回测时可直接通过 strategy_setting 传入）
+        self._next_bar_entry: bool = bool(self._raw_setting.get("next_bar_entry", False))
+        self._base_slippage: float = float(self._raw_setting.get("base_slippage", 0.0))
+        self._atr_slippage_multiplier: float = float(self._raw_setting.get("atr_slippage_multiplier", 0.0))
+        self._pending_entry_signal: Optional[str] = None
 
     # ------------------------------------------------------------------
     # vn.py 生命周期
@@ -87,18 +95,33 @@ class AdaptiveCtaTemplate(CtaTemplate, ABC):
         # 1. 读取最新 AI 配置（版本变化时刷新参数）
         self._refresh_config()
 
-        # 2. 始终执行子类信号计算（含止损/止盈平仓逻辑）
+        # 2. 若启用“下一根K线开仓”，先在本根 bar 开盘执行上一根挂起的入场信号
+        if self._pending_entry_signal:
+            if self._risk_allow_open():
+                if self._pending_entry_signal == "long":
+                    self._open_long(bar, use_open_price=True)
+                elif self._pending_entry_signal == "short":
+                    self._open_short(bar, use_open_price=True)
+            self._pending_entry_signal = None
+
+        # 3. 始终执行子类信号计算（含止损/止盈平仓逻辑）
         signal = self._calc_signal(bar)
 
-        # 3. 风控检查：仅限制开仓，不阻止平仓
+        # 4. 风控检查：仅限制开仓，不阻止平仓
         if signal in ("long", "short") and not self._risk_allow_open():
             return
 
-        # 4. 执行开仓
+        # 5. 执行开仓
         if signal == "long":
-            self._open_long(bar)
+            if self._next_bar_entry:
+                self._pending_entry_signal = "long"
+            else:
+                self._open_long(bar)
         elif signal == "short":
-            self._open_short(bar)
+            if self._next_bar_entry:
+                self._pending_entry_signal = "short"
+            else:
+                self._open_short(bar)
 
     def on_order(self, order: OrderData) -> None:
         pass
@@ -149,6 +172,9 @@ class AdaptiveCtaTemplate(CtaTemplate, ABC):
 
     def _refresh_config(self, force: bool = False) -> None:
         """读取 strategy_runtime.json，版本变化时更新参数。"""
+        engine_type = str(getattr(self.cta_engine, "engine_type", "")).lower()
+        if "backtesting" in engine_type or _BACKTEST_RUNTIME_DISABLED:
+            return
         if not _RUNTIME_CONFIG_PATH.exists():
             return
         try:
@@ -227,14 +253,28 @@ class AdaptiveCtaTemplate(CtaTemplate, ABC):
     # 下单辅助
     # ------------------------------------------------------------------
 
-    def _open_long(self, bar: BarData) -> None:
-        if self.pos == 0:
-            lot = self._calc_lot(bar.close_price)
-            self.buy(bar.close_price, lot)
-            self._entry_price = bar.close_price
+    def _execution_price(self, bar: BarData, side: str, use_open_price: bool = False) -> float:
+        ref_price = bar.open_price if use_open_price else bar.close_price
+        atr_component = 0.0
+        try:
+            atr_component = float(getattr(self, "atr_value", 0.0)) * self._atr_slippage_multiplier
+        except Exception:
+            atr_component = 0.0
+        slip = self._base_slippage + atr_component
+        if side in ("buy", "cover"):
+            return ref_price + slip
+        return max(0.0, ref_price - slip)
 
-    def _open_short(self, bar: BarData) -> None:
+    def _open_long(self, bar: BarData, use_open_price: bool = False) -> None:
         if self.pos == 0:
-            lot = self._calc_lot(bar.close_price)
-            self.short(bar.close_price, lot)
-            self._entry_price = bar.close_price
+            price = self._execution_price(bar, "buy", use_open_price=use_open_price)
+            lot = self._calc_lot(price)
+            self.buy(price, lot)
+            self._entry_price = price
+
+    def _open_short(self, bar: BarData, use_open_price: bool = False) -> None:
+        if self.pos == 0:
+            price = self._execution_price(bar, "short", use_open_price=use_open_price)
+            lot = self._calc_lot(price)
+            self.short(price, lot)
+            self._entry_price = price

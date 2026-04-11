@@ -1,0 +1,21 @@
+{
+  "mode": "backtest",
+  "symbol": "BTC-USDT-SWAP",
+  "exchange": "LOCAL",
+  "interval": "1h",
+  "start": "2023-01-01",
+  "end": "2024-01-01",
+  "rate": 0.0005,
+  "slippage": 5.0,
+  "size": 0.01,
+  "pricetick": 0.1,
+  "capital": 100000,
+  "strategy": "BtcDonchianBreakoutStrategy",
+  "strategy_setting": {
+    "breakout_window": 20,
+    "exit_window": 10,
+    "atr_window": 14,
+    "atr_multiplier": 2.0,
+    "stop_loss_pct": 0.015
+  }
+}
