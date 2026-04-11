@@ -1,0 +1,21 @@
+{
+  "mode": "paper",
+  "symbol": "BTCUSDT",
+  "exchange": "BINANCE",
+  "interval": "1h",
+  "gateway": "BINANCE",
+  "log_level": "INFO",
+  "strategy": "BtcTrendStrategy",
+  "strategy_setting": {
+    "fast_window": 10,
+    "slow_window": 30,
+    "atr_window": 14,
+    "atr_multiplier": 1.5,
+    "stop_loss_pct": 0.015
+  },
+  "ai": {
+    "enabled": true,
+    "update_interval_bars": 4,
+    "lookback_bars": 100
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "regime": "range",
+  "strategy": "mean_reversion",
+  "version": 1,
+  "updated_at": "2026-01-01T00:00:00+00:00",
+  "params": {
+    "rsi_window": 14,
+    "rsi_long_threshold": 30.0,
+    "rsi_short_threshold": 70.0,
+    "boll_window": 20,
+    "boll_dev": 2.0
+  },
+  "risk": {
+    "max_position_pct": 0.2,
+    "stop_loss_pct": 0.015,
+    "take_profit_pct": 0.03
+  }
+}
