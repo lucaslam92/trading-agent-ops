@@ -1,0 +1,24 @@
+{
+  "mode": "backtest",
+  "symbol": "BTC-USDT-SWAP",
+  "exchange": "LOCAL",
+  "interval": "1h",
+  "start": "2024-01-01",
+  "end": "2025-01-01",
+  "rate": 0.0005,
+  "slippage": 5.0,
+  "size": 0.01,
+  "pricetick": 0.1,
+  "capital": 100000,
+  "strategy": "BtcBosRetestLongStrategy",
+  "strategy_setting": {
+    "ma_window": 50,
+    "adx_window": 14,
+    "adx_threshold": 18,
+    "swing_window": 30,
+    "retest_tolerance_atr": 0.3,
+    "stop_atr_multiplier": 1.2,
+    "trailing_atr_multiplier": 2.0,
+    "min_holding_bars": 24
+  }
+}
