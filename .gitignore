@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# OpenClaw local/runtime
+.openclaw/
+.openclaw-local/
+.clawhub/
+.backup-low-token-*/
+
+# Kotlin/Gradle build artifacts
+strategy-evolution-kotlin/.gradle/
+strategy-evolution-kotlin/build/
+
+# Temp/generated backtest configs
+configs/kbridge_*.json
