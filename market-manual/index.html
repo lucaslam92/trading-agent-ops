@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>市场结构训练手册</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- ── Sidebar nav ─────────────────────────────────────────────────────── -->
+  <nav class="sidebar">
+    <div class="sidebar-logo">
+      📊 市场结构
+      <small>每日训练手册</small>
+    </div>
+    <div class="nav-section">交易</div>
+    <div class="nav-item active" data-tab="tab-market">
+      <span class="icon">📈</span>行情监控
+    </div>
+    <div class="nav-item" data-tab="tab-checklist">
+      <span class="icon">✅</span>今日清单
+    </div>
+    <div class="nav-item" data-tab="tab-journal">
+      <span class="icon">📝</span>每日日记
+    </div>
+    <div class="nav-section">工具</div>
+    <div class="nav-item" data-tab="tab-tools">
+      <span class="icon">🔧</span>工具箱
+    </div>
+    <div class="nav-item" data-tab="tab-manual">
+      <span class="icon">📖</span>操作手册
+    </div>
+  </nav>
+
+  <!-- ── Main content ────────────────────────────────────────────────────── -->
+  <main class="main">
+
+    <!-- 行情监控 -->
+    <section id="tab-market" class="tab-panel active">
+      <div class="section-title">行情监控</div>
+
+      <div class="card">
+        <div class="status-bar">
+          <div>
+            <div class="card-title">A股主要指数</div>
+            <div id="market-status" class="status-text">加载中…</div>
+          </div>
+          <button id="market-refresh-btn" class="btn">刷新</button>
+        </div>
+        <div id="index-grid"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">板块资金流向（今日）</div>
+        <div class="sector-grid">
+          <div>
+            <div style="font-size:12px;color:var(--up);font-weight:600;margin-bottom:6px;">▲ 净流入前5</div>
+            <table class="sector-table">
+              <thead><tr><th>板块</th><th>涨跌幅</th><th>净流入</th></tr></thead>
+              <tbody id="sector-inflow"></tbody>
+            </table>
+          </div>
+          <div>
+            <div style="font-size:12px;color:var(--down);font-weight:600;margin-bottom:6px;">▼ 净流出前5</div>
+            <table class="sector-table">
+              <thead><tr><th>板块</th><th>涨跌幅</th><th>净流出</th></tr></thead>
+              <tbody id="sector-outflow"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">全球行情参考（手动记录）</div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:12px;">
+          从同花顺/股票软件查阅后填入，点击保存存入本地数据库
+        </div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label">纳斯达克 (%)</label>
+            <input id="g-nasdaq" class="form-control" type="number" step="0.01" placeholder="如 +0.5">
+          </div>
+          <div class="form-group">
+            <label class="form-label">恒生科技 (%)</label>
+            <input id="g-hshk" class="form-control" type="number" step="0.01" placeholder="如 +0.8">
+          </div>
+          <div class="form-group">
+            <label class="form-label">A50期指 (%)</label>
+            <input id="g-a50" class="form-control" type="number" step="0.01" placeholder="如 +0.2">
+          </div>
+          <div class="form-group">
+            <label class="form-label">美10年期国债收益率 (%)</label>
+            <input id="g-usbond" class="form-control" type="number" step="0.01" placeholder="如 4.30">
+          </div>
+          <div class="form-group">
+            <label class="form-label">黄金 (%)</label>
+            <input id="g-gold" class="form-control" type="number" step="0.01" placeholder="如 +0.1">
+          </div>
+          <div class="form-group">
+            <label class="form-label">原油 (%)</label>
+            <input id="g-oil" class="form-control" type="number" step="0.01" placeholder="如 -0.3">
+          </div>
+          <div class="form-group">
+            <label class="form-label">NVDA盘后 (%)</label>
+            <input id="g-nvda" class="form-control" type="number" step="0.01" placeholder="如 +1.2">
+          </div>
+          <div class="form-group">
+            <label class="form-label">今日偏好判断</label>
+            <select id="g-bias" class="form-control">
+              <option value="">请选择</option>
+              <option>科技偏强</option>
+              <option>避险偏强</option>
+              <option>中性</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-actions">
+          <button id="global-save-btn" class="btn btn-primary">保存今日记录</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 今日清单 -->
+    <section id="tab-checklist" class="tab-panel">
+      <div class="section-title">今日清单</div>
+
+      <div class="card">
+        <div class="card-title">提醒计时</div>
+        <div class="alarm-box">
+          <div id="alarm-countdown">--:--</div>
+          <div>
+            <div id="alarm-next" style="margin-bottom:4px;"></div>
+            <button id="alarm-enable" class="btn">开启浏览器通知</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">今日操作清单</div>
+        <div class="cl-progress"><div id="cl-progress-bar" class="cl-progress-bar" style="width:0%"></div></div>
+        <div class="cl-progress-info"><span id="cl-progress-txt">0 / 12 完成</span></div>
+        <div id="checklist-wrap"></div>
+      </div>
+    </section>
+
+    <!-- 每日日记 -->
+    <section id="tab-journal" class="tab-panel">
+      <div class="section-title">每日市场结构日记</div>
+
+      <div style="display:grid;grid-template-columns:1fr 320px;gap:16px;align-items:start">
+        <div class="card">
+          <div class="card-title">填写日记</div>
+          <div class="form-grid">
+            <div class="form-group">
+              <label class="form-label">日期</label>
+              <input id="journal-date" class="form-control" type="date">
+            </div>
+            <div class="form-group">
+              <label class="form-label">今日主线（1-2个）</label>
+              <input id="j-mainline" class="form-control" type="text" placeholder="如 AI算力、光模块">
+            </div>
+            <div class="form-group">
+              <label class="form-label">龙头股（代码+名称）</label>
+              <input id="j-leaders" class="form-control" type="text" placeholder="如 中际旭创 300308">
+            </div>
+            <div class="form-group">
+              <label class="form-label">净流入板块（前3）</label>
+              <input id="j-sectors" class="form-control" type="text" placeholder="如 通信设备、半导体">
+            </div>
+            <div class="form-group">
+              <label class="form-label">市场情绪</label>
+              <select id="j-sentiment" class="form-control">
+                <option value="">请选择</option>
+                <option>冰点</option><option>修复</option>
+                <option>主升</option><option>高潮</option><option>退潮</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">风险偏好</label>
+              <select id="j-risk" class="form-control">
+                <option value="">请选择</option>
+                <option>科技成长</option><option>避险红利</option>
+                <option>小盘投机</option><option>混沌</option>
+              </select>
+            </div>
+            <div class="form-group full">
+              <label class="form-label">今日市场理解（今天在交易什么？资金为何流向主线？哪些是假强？龙头健康吗？）</label>
+              <textarea id="j-analysis" class="form-control" rows="5"
+                placeholder="今天市场在交易…资金流向主线的原因是…假强板块是…龙头状态是…"></textarea>
+            </div>
+            <div class="form-group full">
+              <label class="form-label">今日错误判断 / 错误操作</label>
+              <textarea id="j-mistakes" class="form-control" rows="2" placeholder="无"></textarea>
+            </div>
+          </div>
+          <div class="form-actions">
+            <button id="journal-save-btn" class="btn btn-primary">保存</button>
+            <button id="journal-new-btn" class="btn">新建今日</button>
+          </div>
+        </div>
+
+        <div class="card" style="position:sticky;top:0">
+          <div class="card-title">历史记录（最近30天）</div>
+          <div id="journal-history"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 工具箱 -->
+    <section id="tab-tools" class="tab-panel">
+      <div class="section-title">工具箱</div>
+      <div class="tool-grid">
+
+        <!-- 龙头健康度 -->
+        <div class="card">
+          <div class="card-title">龙头健康度评估</div>
+          <form id="health-form">
+            <table class="score-table">
+              <thead><tr><th>指标</th><th>状态</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td>收盘价位置</td>
+                  <td>
+                    <select id="hc-price">
+                      <option value="3">创20日新高（健康）</option>
+                      <option value="1">仍在5日线上（注意）</option>
+                      <option value="0">跌破10日线（危险）</option>
+                    </select>
+                  </td>
+                </tr>
+                <tr>
+                  <td>成交量</td>
+                  <td>
+                    <select id="hc-volume">
+                      <option value="2">温和放大20-50%（健康）</option>
+                      <option value="1">缩量上涨（存疑）</option>
+                      <option value="0">爆量>100%且收阴（危险）</option>
+                    </select>
+                  </td>
+                </tr>
+                <tr>
+                  <td>分时表现</td>
+                  <td>
+                    <select id="hc-intraday">
+                      <option value="2">大盘跌时横盘（抗跌）</option>
+                      <option value="1">跟随大盘</option>
+                      <option value="0">大盘稳自己独跌</option>
+                    </select>
+                  </td>
+                </tr>
+                <tr>
+                  <td>板块带动</td>
+                  <td>
+                    <select id="hc-sector">
+                      <option value="3">≥3只同板块涨停或>7%</option>
+                      <option value="1">板块内只有它涨</option>
+                      <option value="0">板块跌多涨少</option>
+                    </select>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </form>
+          <div>综合判断：<span id="health-verdict" class="verdict verdict-green">健康</span></div>
+        </div>
+
+        <!-- 假强板块判断 -->
+        <div class="card">
+          <div class="card-title">假强板块快速判断</div>
+          <p style="font-size:12px;color:var(--text2);margin-bottom:12px;">
+            命中1条观察，命中2条以上基本确认假强
+          </p>
+          <form id="false-strong-form">
+            <div class="fs-check">
+              <input type="checkbox" id="fs1">
+              <label for="fs1">高开低走：开盘涨幅 &gt;3%，收盘不足 1%</label>
+            </div>
+            <div class="fs-check">
+              <input type="checkbox" id="fs2">
+              <label for="fs2">无板块跟随：只有1只个股涨，同板块其他不动</label>
+            </div>
+            <div class="fs-check">
+              <input type="checkbox" id="fs3">
+              <label for="fs3">资金净流出：板块涨幅为正，但资金流向显示净流出</label>
+            </div>
+          </form>
+          <div style="margin-top:12px;">
+            结论：<span id="fs-verdict" class="verdict verdict-green">无假强信号</span>
+          </div>
+        </div>
+
+        <!-- 今日观察表 -->
+        <div class="card" style="grid-column:1/-1">
+          <div class="card-title">今日观察对照表（第4步）</div>
+          <table class="sector-table" style="width:100%">
+            <thead>
+              <tr>
+                <th>方向</th><th>代表标的</th>
+                <th>强信号</th><th>弱信号</th><th>今日状态</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>AI算力</td>
+                <td>中际旭创 300308<br>工业富联 601138</td>
+                <td style="color:var(--text2);font-size:12px;">9:35前涨幅>3%且全天不破开盘价</td>
+                <td style="color:var(--text2);font-size:12px;">高开>5%后回落到1%以下</td>
+                <td>
+                  <select class="form-control obs-select" style="width:90px" data-key="ai">
+                    <option value="">未观察</option>
+                    <option value="strong">强</option>
+                    <option value="weak">弱</option>
+                    <option value="neutral">中性</option>
+                  </select>
+                </td>
+              </tr>
+              <tr>
+                <td>半导体设备</td>
+                <td>北方华创 002371</td>
+                <td style="color:var(--text2);font-size:12px;">低开后10分钟内翻红</td>
+                <td style="color:var(--text2);font-size:12px;">高开>4%后持续走低</td>
+                <td>
+                  <select class="form-control obs-select" style="width:90px" data-key="semi">
+                    <option value="">未观察</option>
+                    <option value="strong">强</option>
+                    <option value="weak">弱</option>
+                    <option value="neutral">中性</option>
+                  </select>
+                </td>
+              </tr>
+              <tr>
+                <td>机器人</td>
+                <td>鸣志电器 603728<br>绿的谐波 688017</td>
+                <td style="color:var(--text2);font-size:12px;">断板股出现反包涨幅>5%</td>
+                <td style="color:var(--text2);font-size:12px;">龙头跌停或跌超7%</td>
+                <td>
+                  <select class="form-control obs-select" style="width:90px" data-key="robot">
+                    <option value="">未观察</option>
+                    <option value="strong">强</option>
+                    <option value="weak">弱</option>
+                    <option value="neutral">中性</option>
+                  </select>
+                </td>
+              </tr>
+              <tr>
+                <td>高股息避险</td>
+                <td>长江电力 600900<br>中国神华 601088</td>
+                <td style="color:var(--text2);font-size:12px;">大盘跌时逆势涨0.5%以上</td>
+                <td style="color:var(--text2);font-size:12px;">大盘涨时跌超1%</td>
+                <td>
+                  <select class="form-control obs-select" style="width:90px" data-key="dividend">
+                    <option value="">未观察</option>
+                    <option value="strong">强</option>
+                    <option value="weak">弱</option>
+                    <option value="neutral">中性</option>
+                  </select>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="form-actions">
+            <button id="obs-save-btn" class="btn btn-primary">保存观察</button>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- 操作手册 -->
+    <section id="tab-manual" class="tab-panel">
+      <div class="section-title">每日操作手册（细化版）</div>
+      <div class="manual-content">
+
+        <h2>一、盘前准备（共30分钟）</h2>
+
+        <h3><span class="step-num">1</span>打开全球行情（5分钟）</h3>
+        <p>工具：同花顺自选页添加以下品种</p>
+        <ul>
+          <li>纳斯达克 NDX → 看收盘涨跌幅</li>
+          <li>恒生科技 HSTECH → 看收盘涨跌幅</li>
+          <li>A50期指 CN00Y → 看当前涨跌幅</li>
+          <li>美10年期国债收益率 US10Y → 看数值</li>
+          <li>黄金 GC00Y → 看涨跌幅</li>
+          <li>原油 CL00Y → 看涨跌幅</li>
+          <li>美股AI龙头：NVDA MSFT META → 看盘后涨跌幅</li>
+        </ul>
+        <p><strong>一句话结论：</strong>科技偏强 / 避险偏强 / 中性</p>
+
+        <h3><span class="step-num">2</span>判断今日风险偏好基准（5分钟）</h3>
+        <p>集合竞价（9:15-9:25）对比：</p>
+        <ul>
+          <li>进攻代表：人工智能ETF 515070 或 半导体ETF 512480</li>
+          <li>防守代表：银行ETF 512800 或 电力ETF 159611</li>
+        </ul>
+        <table>
+          <tr><th>情况</th><th>结论</th></tr>
+          <tr><td>进攻ETF涨幅 > 防守ETF</td><td>今日偏好科技成长</td></tr>
+          <tr><td>防守ETF涨幅 > 进攻ETF</td><td>今日偏避险</td></tr>
+          <tr><td>差异 ±0.2% 以内</td><td>震荡市，无明显偏好</td></tr>
+        </table>
+
+        <h3><span class="step-num">3</span>筛选今日关键词新闻（10分钟）</h3>
+        <p>工具：同花顺 → 资讯 → 要闻 → 精选/头条，或财联社APP → 电报</p>
+        <p><strong>必须过滤：</strong>含"暴涨""惊天""突发""重磅"的；个股分析；个人大V。</p>
+        <p><strong>只捕捉关键词：</strong>政策/国务院/发改委/工信部 · AI/大模型/OpenAI · 芯片/算力/光模块 · 降息/加息/央行 · 业绩超预期（仅AI半导体龙头）· 机器人/数据要素/低空经济</p>
+        <p>输出：≤3条新闻，写一句话结论。</p>
+
+        <h3><span class="step-num">4</span>建立今日观察表（10分钟）</h3>
+        <p>→ 见"工具箱"中的今日观察对照表</p>
+
+        <h2>二、盘中观察（9:30 – 15:00）</h2>
+
+        <h3><span class="step-num">5</span>开盘5分钟快速扫描（9:30-9:35）</h3>
+        <ol>
+          <li>同花顺 → 板块 → 行业板块 → 按涨幅排序，看前三名</li>
+          <li>昨日龙头：高开>2%且5分钟内无跳水 → 强势；低开<-2%且无法翻红 → 弱势</li>
+          <li>涨跌家数：上涨>3000为偏暖；涨停>50且跌停<5为良好</li>
+        </ol>
+
+        <h3><span class="step-num">6</span>三个关键时间点</h3>
+        <table>
+          <tr><th>时间</th><th>观察内容</th></tr>
+          <tr><td><strong>10:30</strong></td><td>最强板块是否持续？大盘分时是否在白线上方？</td></tr>
+          <tr><td><strong>13:15</strong></td><td>上午强势板块是否冲高回落？有无新板块突然拉直线？</td></tr>
+          <tr><td><strong>14:30</strong></td><td>今天放量还是缩量？龙头是否抗跌？</td></tr>
+        </table>
+
+        <h3><span class="step-num">7</span>随时记录资金流向</h3>
+        <p>同花顺 → 板块 → 资金流向 → 今日 → 看净流入（亿）</p>
+        <p>不需精确数字，只需知道：今日流入主线、流出板块各是什么。</p>
+
+        <h2>三、盘后复盘（15:00后，约20分钟）</h2>
+
+        <h3><span class="step-num">8</span>填写市场结构日记 → 见"每日日记"页</h3>
+
+        <h3><span class="step-num">9</span>检验"假强"板块</h3>
+        <p>→ 见"工具箱" — 假强板块快速判断</p>
+        <p>三条规则：高开低走；无板块跟随；资金净流出。命中2条以上 → 假强。</p>
+
+        <h3><span class="step-num">10</span>判断龙头健康度</h3>
+        <p>→ 见"工具箱" — 龙头健康度评估</p>
+        <table>
+          <tr><th>指标</th><th>健康</th><th>警告</th><th>危险</th></tr>
+          <tr><td>收盘价</td><td>创20日新高</td><td>仍在5日线上</td><td>跌破10日线</td></tr>
+          <tr><td>成交量</td><td>温和放大20-50%</td><td>缩量上涨</td><td>爆量>100%且收阴</td></tr>
+          <tr><td>分时</td><td>大盘跌它横盘</td><td>跟随大盘</td><td>大盘稳它独跌</td></tr>
+          <tr><td>板块带动</td><td>≥3只涨停或>7%</td><td>板块只有它涨</td><td>板块跌多涨少</td></tr>
+        </table>
+
+        <h2>四、第一阶段训练要点（前2周）</h2>
+        <ul>
+          <li>不交易，或只买1手（100股）用来感受</li>
+          <li>每天必须填完日记，哪怕只写一行</li>
+          <li>周末回顾本周5天日记，找规律</li>
+          <li>重点训练：开盘5分钟判断"今天可能强/弱"——允许错，但要记录为什么错</li>
+        </ul>
+
+        <h2>五、自选股分组建议</h2>
+        <table>
+          <tr><th>分组</th><th>品种</th></tr>
+          <tr><td>全球参考</td><td>纳指、恒生科技、A50期指、美债收益率</td></tr>
+          <tr><td>AI算力</td><td>中际旭创 300308、工业富联 601138、天孚通信 300394</td></tr>
+          <tr><td>半导体</td><td>北方华创 002371、中芯国际 688981</td></tr>
+          <tr><td>机器人</td><td>鸣志电器 603728、绿的谐波 688017</td></tr>
+          <tr><td>高股息</td><td>长江电力 600900、中国神华 601088、工商银行 601398</td></tr>
+        </table>
+
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<div id="toast"></div>
+
+<script type="module">
+  import { db } from './js/db.js';
+  import './js/app.js';
+
+  // Global market save
+  document.getElementById('global-save-btn').addEventListener('click', async () => {
+    const date = new Date().toISOString().slice(0, 10);
+    await db.open();
+    await db.save('market_data', {
+      date,
+      nasdaq:   +document.getElementById('g-nasdaq').value  || null,
+      hshk:     +document.getElementById('g-hshk').value    || null,
+      a50:      +document.getElementById('g-a50').value     || null,
+      usBond:   +document.getElementById('g-usbond').value  || null,
+      gold:     +document.getElementById('g-gold').value    || null,
+      oil:      +document.getElementById('g-oil').value     || null,
+      nvda:     +document.getElementById('g-nvda').value    || null,
+      bias:     document.getElementById('g-bias').value     || null,
+    });
+    // Load back to prefill
+    const toast = document.getElementById('toast');
+    toast.textContent = '全球行情记录已保存';
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 2500);
+  });
+
+  // Prefill global market if saved today
+  (async () => {
+    await db.open();
+    const date = new Date().toISOString().slice(0, 10);
+    const d = await db.get('market_data', date);
+    if (!d) return;
+    if (d.nasdaq)  document.getElementById('g-nasdaq').value  = d.nasdaq;
+    if (d.hshk)    document.getElementById('g-hshk').value    = d.hshk;
+    if (d.a50)     document.getElementById('g-a50').value     = d.a50;
+    if (d.usBond)  document.getElementById('g-usbond').value  = d.usBond;
+    if (d.gold)    document.getElementById('g-gold').value    = d.gold;
+    if (d.oil)     document.getElementById('g-oil').value     = d.oil;
+    if (d.nvda)    document.getElementById('g-nvda').value    = d.nvda;
+    if (d.bias)    document.getElementById('g-bias').value    = d.bias;
+  })();
+
+  // Observation table save/load
+  document.getElementById('obs-save-btn').addEventListener('click', async () => {
+    const date = new Date().toISOString().slice(0, 10);
+    const obs  = {};
+    document.querySelectorAll('.obs-select').forEach(s => { obs[s.dataset.key] = s.value; });
+    const existing = await db.get('checklists', date) || { date };
+    existing.observations = obs;
+    await db.save('checklists', existing);
+    const toast = document.getElementById('toast');
+    toast.textContent = '观察表已保存';
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 2500);
+  });
+
+  // Load observation state
+  (async () => {
+    await db.open();
+    const date = new Date().toISOString().slice(0, 10);
+    const d = await db.get('checklists', date);
+    if (!d?.observations) return;
+    document.querySelectorAll('.obs-select').forEach(s => {
+      if (d.observations[s.dataset.key]) s.value = d.observations[s.dataset.key];
+    });
+  })();
+</script>
+</body>
+</html>
