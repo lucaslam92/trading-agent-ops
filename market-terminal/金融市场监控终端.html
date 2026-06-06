@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>市场监控终端</title>
+<link rel="stylesheet" href="lib/tokens.css" />
+<style>
+  html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
+  #root { height: 100vh; }
+  .navtab {
+    padding: 7px 16px; border-radius: 999px; font-size: 13px; font-weight: 600;
+    cursor: pointer; border: 1px solid transparent; color: var(--ink-3);
+    background: transparent; font-family: var(--cjk); transition: all .15s;
+  }
+  .navtab:hover { color: var(--ink); }
+  .navtab.on { color: var(--ink); background: var(--panel-2); border-color: var(--line); }
+</style>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="lib/data.js"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel" src="lib/components.jsx"></script>
+<script src="lib/store.js"></script>
+<script type="text/babel" src="app-screens.jsx"></script>
+<script type="text/babel" src="review-screens.jsx"></script>
+
+<script type="text/babel">
+  const { useState, useEffect } = React;
+
+  const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+    "colorConv": "绿涨红跌",
+    "accent": "青蓝",
+    "tick": 2.2
+  }/*EDITMODE-END*/;
+
+  // accent presets → CSS var pairs
+  const ACCENTS = {
+    "青蓝": { '--accent': 'oklch(0.74 0.115 232)', '--accent-bg': 'oklch(0.32 0.05 232)' },
+    "琥珀": { '--accent': 'oklch(0.80 0.135 78)', '--accent-bg': 'oklch(0.33 0.06 78)' },
+    "靛紫": { '--accent': 'oklch(0.72 0.13 295)', '--accent-bg': 'oklch(0.32 0.06 295)' },
+    "青绿": { '--accent': 'oklch(0.76 0.11 178)', '--accent-bg': 'oklch(0.31 0.05 178)' },
+  };
+  const GREEN = { up: 'oklch(0.76 0.16 150)', upDim: 'oklch(0.50 0.10 150)', upBg: 'oklch(0.30 0.06 150)', down: 'oklch(0.68 0.205 22)', downDim: 'oklch(0.46 0.13 22)', downBg: 'oklch(0.30 0.085 22)' };
+  function colorVars(conv) {
+    const a = GREEN;
+    const upSet = { '--up': a.up, '--up-dim': a.upDim, '--up-bg': a.upBg, '--down': a.down, '--down-dim': a.downDim, '--down-bg': a.downBg };
+    if (conv === '绿涨红跌') return upSet;
+    // swap: 红涨绿跌
+    return { '--up': a.down, '--up-dim': a.downDim, '--up-bg': a.downBg, '--down': a.up, '--down-dim': a.upDim, '--down-bg': a.upBg };
+  }
+
+  function App() {
+    const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
+    const [tab, setTab] = useState(() => localStorage.getItem('mm_tab') || 'market');
+    useEffect(() => { localStorage.setItem('mm_tab', tab); }, [tab]);
+
+    // ticking speed
+    useEffect(() => { window.MarketData.stop(); window.MarketData.start((t.tick || 2.2) * 1000); window.MarketData.tryLive(); }, [t.tick]);
+
+    const overrides = { ...colorVars(t.colorConv), ...(ACCENTS[t.accent] || ACCENTS['青蓝']) };
+
+    return (
+      <div className="term" style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--bg)', ...overrides }}>
+        {/* ── header ─────────────────────────────────────────── */}
+        <header style={{ display: 'flex', alignItems: 'center', gap: 20, padding: '0 18px', height: 56, borderBottom: '1px solid var(--line-soft)', flexShrink: 0, background: 'var(--panel)' }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 9 }}>
+            <span style={{ fontSize: 16, fontWeight: 700, letterSpacing: '0.04em' }}>市场监控终端</span>
+            <span className="mono" style={{ fontSize: 10.5, color: 'var(--ink-4)' }}>MARKET&nbsp;DESK</span>
+          </div>
+          <nav style={{ display: 'flex', gap: 4 }}>
+            <button className={'navtab' + (tab === 'market' ? ' on' : '')} onClick={() => setTab('market')}>行情监控</button>
+            <button className={'navtab' + (tab === 'tools' ? ' on' : '')} onClick={() => setTab('tools')}>工具箱</button>
+            <button className={'navtab' + (tab === 'checklist' ? ' on' : '')} onClick={() => setTab('checklist')}>今日清单</button>
+            <button className={'navtab' + (tab === 'journal' ? ' on' : '')} onClick={() => setTab('journal')}>每日日记</button>
+          </nav>
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 14 }}>
+            <HeaderCountdown />
+            <Clock /><LiveChip />
+          </div>
+        </header>
+
+        {/* ── body ───────────────────────────────────────────── */}
+        <main style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: 16, display: 'flex', flexDirection: 'column' }}>
+          {tab === 'market' && <MarketScreen />}
+          {tab === 'tools' && <ToolboxScreen />}
+          {tab === 'checklist' && <ChecklistScreen />}
+          {tab === 'journal' && <JournalScreen />}
+        </main>
+
+        {/* ── tweaks ─────────────────────────────────────────── */}
+        <TweaksPanel title="Tweaks">
+          <TweakSection label="配色" />
+          <TweakRadio label="涨跌配色" value={t.colorConv} options={['绿涨红跌', '红涨绿跌']} onChange={(v) => setTweak('colorConv', v)} />
+          <TweakRadio label="强调色" value={t.accent} options={['青蓝', '琥珀', '靛紫', '青绿']} onChange={(v) => setTweak('accent', v)} />
+          <TweakSection label="行情" />
+          <TweakSlider label="刷新频率" value={t.tick} min={1} max={6} step={0.2} unit="s" onChange={(v) => setTweak('tick', v)} />
+        </TweaksPanel>
+      </div>
+    );
+  }
+
+  ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
