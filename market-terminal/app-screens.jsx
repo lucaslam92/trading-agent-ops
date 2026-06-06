@@ -64,7 +64,7 @@ function MarketScreen() {
           <span className="panel-title">全球参考</span>
           <GlobalStrip />
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--ink-2)' }}>
-            <span className="dot" />资金主线 <b style={{ color: 'var(--up)' }}>{read.lead.theme}</b>
+            <span className="dot" />资金主线 <b style={{ color: 'var(--up)' }}>{read.lead?.theme ?? '—'}</b>
             <span style={{ color: 'var(--line)' }}>·</span>偏好 <b style={{ color: 'var(--accent)' }}>{read.bias}</b>
           </div>
         </div>
@@ -226,8 +226,9 @@ function ObservationTable() {
 
 function ToolboxScreen() {
   const s = useMarket();
-  const [sel, setSel] = _aS(s.leaders[0].code);
-  const leader = s.leaders.find((l) => l.code === sel) || s.leaders[0];
+  const [sel, setSel] = _aS(s.leaders[0]?.code ?? '');
+  const leader = s.leaders.find((l) => l.code === sel) ?? s.leaders[0];
+  if (!leader) return null;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>

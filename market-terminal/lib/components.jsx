@@ -254,7 +254,7 @@ function GlobalStrip() {
 /* ── live status chip ─────────────────────────────────────────────────────── */
 function LiveChip() {
   const s = useMarket();
-  const live = s.source === 'live';
+  const live = s.source === 'eastmoney' || s.source === 'tushare';
   return (
     <span className={'chip ' + (live ? 'live' : 'mock')}>
       <span className={'dot' + (live ? '' : ' warn')} style={{ width: 6, height: 6 }} />
