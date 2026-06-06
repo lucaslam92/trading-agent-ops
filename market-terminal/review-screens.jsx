@@ -79,7 +79,9 @@ function ChecklistScreen() {
   _rE(() => { _store().get('checklists', date).then((d) => { setChecks(d?.checks || {}); setNotes(d?.notes || {}); }); }, [date]);
 
   const persist = async (nextChecks, nextNotes) => {
-    await _store().save('checklists', { date, checks: nextChecks, notes: nextNotes });
+    const existing = (await _store().get('checklists', date)) || { date };
+    existing.checks = nextChecks; existing.notes = nextNotes;
+    await _store().save('checklists', existing);
   };
 
   const toggle = async (id) => {

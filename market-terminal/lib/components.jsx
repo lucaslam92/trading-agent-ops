@@ -113,43 +113,66 @@ function BreadthBar() {
 /* ── Sector rotation map: scatter quadrant (THE centerpiece) ───────────────── */
 function RotationMap({ width = 460, height = 360, labeled = true }) {
   const s = useMarket();
-  const pad = 38;
+  // asymmetric padding: extra top/bottom room so corner labels live in the
+  // margins, clear of the plotting area where bubbles sit
+  const padX = 16, padT = 30, padB = 30;
   const xMin = -6, xMax = 8, yMin = -40, yMax = 60;
-  const px = (chg) => pad + ((chg - xMin) / (xMax - xMin)) * (width - pad * 2);
-  const py = (flow) => height - pad - ((flow - yMin) / (yMax - yMin)) * (height - pad * 2);
+  const px = (chg) => padX + ((chg - xMin) / (xMax - xMin)) * (width - padX * 2);
+  const py = (flow) => height - padB - ((flow - yMin) / (yMax - yMin)) * (height - padT - padB);
   const x0 = px(0), y0 = py(0);
   const rOf = (flow) => 5 + Math.min(22, Math.sqrt(Math.abs(flow)) * 3);
+
+  const QUADS = [
+    { t: '强势吸金', c: 'var(--up)',     corner: 'tr' },
+    { t: '超跌承接', c: 'var(--accent)', corner: 'tl' },
+    { t: '滞涨派发', c: 'var(--warn)',   corner: 'br' },
+    { t: '弱势出逃', c: 'var(--down)',   corner: 'bl' },
+  ];
 
   return (
     <svg width={width} height={height} style={{ display: 'block' }}>
       {/* quadrant tints */}
-      <rect x={x0} y={pad} width={width - pad - x0} height={y0 - pad} fill="var(--up)" opacity="0.05" />
-      <rect x={x0} y={y0} width={width - pad - x0} height={height - pad - y0} fill="var(--warn)" opacity="0.04" />
-      <rect x={pad} y={pad} width={x0 - pad} height={y0 - pad} fill="var(--accent)" opacity="0.04" />
-      <rect x={pad} y={y0} width={x0 - pad} height={height - pad - y0} fill="var(--down)" opacity="0.05" />
+      <rect x={x0} y={padT} width={width - padX - x0} height={y0 - padT} fill="var(--up)" opacity="0.05" />
+      <rect x={x0} y={y0} width={width - padX - x0} height={height - padB - y0} fill="var(--warn)" opacity="0.04" />
+      <rect x={padX} y={padT} width={x0 - padX} height={y0 - padT} fill="var(--accent)" opacity="0.04" />
+      <rect x={padX} y={y0} width={x0 - padX} height={height - padB - y0} fill="var(--down)" opacity="0.05" />
       {/* axes */}
-      <line x1={pad} y1={y0} x2={width - pad} y2={y0} stroke="var(--line)" strokeWidth="1" />
-      <line x1={x0} y1={pad} x2={x0} y2={height - pad} stroke="var(--line)" strokeWidth="1" />
-      {/* axis labels */}
-      <text x={width - pad} y={y0 - 6} textAnchor="end" fontSize="9.5" fill="var(--ink-4)" fontFamily="var(--mono)">涨跌幅 →</text>
-      <text x={x0 + 6} y={pad + 4} fontSize="9.5" fill="var(--ink-4)" fontFamily="var(--mono)">↑ 净流入</text>
-      {labeled && (<>
-        <text x={width - pad - 4} y={pad + 14} textAnchor="end" fontSize="10.5" fill="var(--up)" fontWeight="700" opacity="0.8">强势吸金</text>
-        <text x={pad + 4} y={pad + 14} fontSize="10.5" fill="var(--accent)" fontWeight="700" opacity="0.8">超跌承接</text>
-        <text x={width - pad - 4} y={height - pad - 6} textAnchor="end" fontSize="10.5" fill="var(--warn)" fontWeight="700" opacity="0.75">滞涨派发</text>
-        <text x={pad + 4} y={height - pad - 6} fontSize="10.5" fill="var(--down)" fontWeight="700" opacity="0.8">弱势出逃</text>
-      </>)}
-      {/* bubbles */}
+      <line x1={padX} y1={y0} x2={width - padX} y2={y0} stroke="var(--line)" strokeWidth="1" />
+      <line x1={x0} y1={padT} x2={x0} y2={height - padB} stroke="var(--line)" strokeWidth="1" />
+      {/* axis labels (kept toward the centre axes, away from the corners) */}
+      <text x={width - padX - 2} y={y0 - 5} textAnchor="end" fontSize="9.5" fill="var(--ink-4)" fontFamily="var(--mono)">涨跌幅 →</text>
+      <text x={x0 + 6} y={padT - 8} fontSize="9.5" fill="var(--ink-4)" fontFamily="var(--mono)">↑ 净流入</text>
+      {/* bubbles — name sits INSIDE the circle, scaled to fit; bubbles too
+          small to hold their name are left unlabelled (no collisions) */}
       {s.sectors.map((sec) => {
         const cx = px(sec.changePct), cy = py(sec.netInflow), r = rOf(sec.netInflow);
         const c = cssVar(sec.changePct);
-        const big = Math.abs(sec.netInflow) > 18 || Math.abs(sec.changePct) > 3;
+        const fs = Math.min(10.5, (2 * r - 5) / sec.name.length);
+        const showName = fs >= 7.2;
         return (
           <g key={sec.id} style={{ transition: 'transform .9s cubic-bezier(.4,0,.2,1)', transform: `translate(${cx}px,${cy}px)` }}>
-            <circle r={r} fill={c} opacity="0.16" />
+            <circle r={r} fill={c} opacity="0.18" />
             <circle r={r} fill="none" stroke={c} strokeWidth="1.4" opacity="0.9" />
-            <circle r="2" fill={c} />
-            {big && <text y={-r - 4} textAnchor="middle" fontSize="10.5" fill="var(--ink)" fontWeight="600">{sec.name}</text>}
+            {showName
+              ? <text textAnchor="middle" y={fs * 0.36} fontSize={fs} fontWeight="600"
+                  fill="var(--ink)" stroke="var(--bg)" strokeWidth="2.4" strokeLinejoin="round"
+                  style={{ paintOrder: 'stroke' }}>{sec.name}</text>
+              : <circle r="2" fill={c} />}
+          </g>
+        );
+      })}
+      {/* quadrant labels — last (on top), opaque pill sized to the text so a
+          corner bubble can never push them off or bleed through */}
+      {labeled && QUADS.map((q) => {
+        const pillW = q.t.length * 11.5 + 16, pillH = 19, inset = 4;
+        const left = /r$/.test(q.corner) ? width - inset - pillW : inset;
+        const top  = /^t/.test(q.corner) ? inset : height - inset - pillH;
+        return (
+          <g key={q.corner}>
+            <rect x={left} y={top} width={pillW} height={pillH} rx="5"
+              fill="var(--panel-2)" stroke={q.c} strokeOpacity="0.45" strokeWidth="1" />
+            <text x={left + pillW / 2} y={top + pillH / 2 + 3.5} textAnchor="middle"
+              fontSize="10.5" fill={q.c} fontWeight="700">{q.t}</text>
           </g>
         );
       })}
@@ -235,16 +258,29 @@ function LeaderBoard({ dense = false, spark = true }) {
 }
 
 /* ── Global reference strip ───────────────────────────────────────────────── */
+function fmtLevel(v) {
+  if (v == null) return '—';
+  return Math.abs(v) >= 1000
+    ? v.toLocaleString('en-US', { maximumFractionDigits: 1 })
+    : v.toFixed(2);
+}
 function GlobalStrip() {
   const s = useMarket();
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
       {s.globals.map((g) => (
-        <div key={g.code} style={{ display: 'flex', flexDirection: 'column', gap: 1, padding: '6px 11px', background: 'var(--panel-2)', borderRadius: 'var(--r-sm)', minWidth: 84 }}>
+        <div key={g.code} style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '6px 11px', background: 'var(--panel-2)', borderRadius: 'var(--r-sm)', minWidth: 96 }}>
           <span style={{ fontSize: 10.5, color: 'var(--ink-3)' }}>{g.label}</span>
-          {g.isLevel
-            ? <span className="mono" style={{ fontSize: 13, fontWeight: 600 }}>{g.changePct.toFixed(2)}<span style={{ fontSize: 9, color: 'var(--ink-4)' }}>%</span></span>
-            : <Pct v={g.changePct} size={13} />}
+          {g.isLevel ? (
+            <span className="mono" style={{ fontSize: 13, fontWeight: 600 }}>
+              {fmtLevel(g.price)}<span style={{ fontSize: 9, color: 'var(--ink-4)' }}>%</span>
+            </span>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}>
+              <span className="mono" style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)' }}>{fmtLevel(g.price)}</span>
+              <Pct v={g.changePct} size={11} />
+            </div>
+          )}
         </div>
       ))}
     </div>

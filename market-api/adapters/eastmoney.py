@@ -209,7 +209,7 @@ class EastmoneyAdapter(DataAdapter):
             if isinstance(item, Exception) or item is None:
                 fallback = next((g for g in self._globals_cache if g["code"] == code), None)
                 result.append(fallback or {
-                    "code": code, "label": label, "changePct": 0.0,
+                    "code": code, "label": label, "price": 0.0, "changePct": 0.0,
                     "note": "离线", "isLevel": is_lvl,
                 })
             else:
@@ -228,13 +228,14 @@ class EastmoneyAdapter(DataAdapter):
         meta = r.json().get("chart", {}).get("result", [{}])[0].get("meta", {})
         price = meta.get("regularMarketPrice") or 0
         prev  = meta.get("chartPreviousClose") or meta.get("previousClose") or price
+        display_price = round(float(price), 2)
         if is_level:
-            change = round(float(price), 2)
+            change = display_price
         else:
             change = round((price - prev) / prev * 100, 2) if prev else 0.0
         state = meta.get("marketState", "CLOSED")
         note  = "实时" if state in ("REGULAR", "POST") else "收盘"
-        return {"code": code, "label": label, "changePct": change, "note": note, "isLevel": is_level}
+        return {"code": code, "label": label, "price": display_price, "changePct": change, "note": note, "isLevel": is_level}
 
     # ── Market breadth ───────────────────────────────────────────────────────
 

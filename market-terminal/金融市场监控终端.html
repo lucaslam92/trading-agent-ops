@@ -21,20 +21,28 @@
 <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
 </head>
 <body>
+<template id="__bundler_thumbnail">
+  <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+    <rect width="100" height="100" rx="16" fill="#14171f"/>
+    <polyline points="30,62 42,50 52,56 70,34" fill="none" stroke="#3fd07a" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="70" cy="34" r="5" fill="#3fd07a"/>
+    <rect x="30" y="70" width="40" height="4" rx="2" fill="#3a8fe0"/>
+  </svg>
+</template>
 <div id="root"></div>
 
-<script src="lib/data.js?v=4"></script>
-<script type="text/babel" src="tweaks-panel.jsx?v=4"></script>
-<script type="text/babel" src="lib/components.jsx?v=4"></script>
-<script src="lib/api.js?v=4"></script>
-<script type="text/babel" src="app-screens.jsx?v=4"></script>
-<script type="text/babel" src="review-screens.jsx?v=4"></script>
+<script src="lib/data.js"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel" src="lib/components.jsx"></script>
+<script src="lib/store.js"></script>
+<script type="text/babel" src="app-screens.jsx"></script>
+<script type="text/babel" src="review-screens.jsx"></script>
 
 <script type="text/babel">
   const { useState, useEffect } = React;
 
   const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
-    "colorConv": "绿涨红跌",
+    "colorConv": "红涨绿跌",
     "accent": "青蓝",
     "tick": 2.2
   }/*EDITMODE-END*/;
@@ -60,6 +68,7 @@
     const [tab, setTab] = useState(() => localStorage.getItem('mm_tab') || 'market');
     useEffect(() => { localStorage.setItem('mm_tab', tab); }, [tab]);
 
+    // SSE connection
     useEffect(() => { const es = window.MarketData.connect(); return () => es.close(); }, []);
 
     const overrides = { ...colorVars(t.colorConv), ...(ACCENTS[t.accent] || ACCENTS['青蓝']) };
