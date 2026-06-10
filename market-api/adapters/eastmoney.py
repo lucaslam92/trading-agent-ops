@@ -62,6 +62,13 @@ def _guess_theme(name: str) -> str:
     return "其他"
 
 
+def _to_float(value, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
 class EastmoneyAdapter(DataAdapter):
     def __init__(self) -> None:
         self._client = httpx.AsyncClient(
@@ -85,15 +92,18 @@ class EastmoneyAdapter(DataAdapter):
             return_exceptions=True,
         )
 
-        def _safe(val, fallback):
-            return val if not isinstance(val, Exception) else fallback
+        def _safe(name, val, fallback):
+            if isinstance(val, Exception):
+                print(f"[EastmoneyAdapter] {name} error: {val}")
+                return fallback
+            return val
 
         return RawSnapshot(
-            indices=_safe(indices, []),
-            sectors=_safe(sectors, []),
-            leaders=_safe(leaders, []),
-            globals=_safe(globals_, self._globals_cache),
-            breadth=_safe(breadth, {"up": 0, "down": 0, "flat": 0, "limitUp": 0, "limitDown": 0}),
+            indices=_safe("indices", indices, []),
+            sectors=_safe("sectors", sectors, []),
+            leaders=_safe("leaders", leaders, []),
+            globals=_safe("globals", globals_, self._globals_cache),
+            breadth=_safe("breadth", breadth, {"up": 0, "down": 0, "flat": 0, "limitUp": 0, "limitDown": 0}),
             source="eastmoney",
         )
 
@@ -108,9 +118,9 @@ class EastmoneyAdapter(DataAdapter):
         for (secid, code, label), raw in zip(_INDICES, results):
             if isinstance(raw, Exception) or not raw:
                 continue
-            price  = float(raw.get("f43") or 0)
-            change = float(raw.get("f170") or 0)
-            prev   = float(raw.get("f18") or 0)
+            price  = _to_float(raw.get("f43"))
+            change = _to_float(raw.get("f170"))
+            prev   = _to_float(raw.get("f18"))
             if prev == 0 and price and change != -100:
                 prev = round(price / (1 + change / 100), 2)
             out.append({
@@ -159,12 +169,12 @@ class EastmoneyAdapter(DataAdapter):
                 seen.add(name)
                 items.append(x)
 
-        items.sort(key=lambda x: float(x.get("f62") or 0), reverse=True)
+        items.sort(key=lambda x: _to_float(x.get("f62")), reverse=True)
         return [
             {
                 "name": x.get("f14") or "",
-                "changePct": round(float(x.get("f3") or 0), 2),
-                "netInflow": round(float(x.get("f62") or 0) / 1e8, 1),
+                "changePct": round(_to_float(x.get("f3")), 2),
+                "netInflow": round(_to_float(x.get("f62")) / 1e8, 1),
                 "theme": _guess_theme(x.get("f14") or ""),
             }
             for x in items
@@ -181,9 +191,9 @@ class EastmoneyAdapter(DataAdapter):
         for (secid, code, name, sector, theme), raw in zip(_LEADERS, results):
             if isinstance(raw, Exception) or not raw:
                 continue
-            price  = float(raw.get("f43") or 0)
-            change = float(raw.get("f170") or 0)
-            open_  = float(raw.get("f46") or 0)
+            price  = _to_float(raw.get("f43"))
+            change = _to_float(raw.get("f170"))
+            open_  = _to_float(raw.get("f46"))
             out.append({
                 "code": code, "name": name, "sector": sector,
                 "price": round(price, 2), "changePct": round(change, 2),
@@ -251,7 +261,7 @@ class EastmoneyAdapter(DataAdapter):
         r.raise_for_status()
         diff_raw = r.json().get("data", {}).get("diff") or {}
         items = diff_raw if isinstance(diff_raw, list) else list(diff_raw.values())
-        up   = sum(1 for x in items if float(x.get("f3") or 0) > 0)
-        down = sum(1 for x in items if float(x.get("f3") or 0) < 0)
+        up   = sum(1 for x in items if _to_float(x.get("f3")) > 0)
+        down = sum(1 for x in items if _to_float(x.get("f3")) < 0)
         flat = len(items) - up - down
         return {"up": up, "down": down, "flat": flat, "limitUp": 0, "limitDown": 0}
