@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# Secrets & local config
+.env
+*.env.local
+
+# Database
+*.db
+*.sqlite
+
+# Claude internal
+.claude/
+
+# macOS
+.DS_Store
+
+# Logs
+*.log
+logs/
