@@ -2,6 +2,8 @@
 
 状态：设计约定，尚未实现。与 [后端架构](architecture.md)、[接口契约](../shared/api-contracts.md)、[运行维护](operations.md) 配套。
 
+职责归属：以下发布 / 恢复流程由应用层用例协调，ChartSession 和 ReadContextManager 属于应用层；数据库读快照、单 writer 与事务由基础设施实现应用层端口。Controller 只能调用查询 / 订阅用例，不能直接读库或安装状态；领域引擎只返回独立 nextState 与计算结果。包与依赖规则见 [后端分层](architecture.md#2-分层架构与代码组织)。
+
 ## 1. 版本与不变量
 
 每个 `instrumentId + timeframe` 是独立序列。`datasetRevision` 表示一代完整分析数据，`epoch` 表示本次运行中的推送会话，`seq` 表示该 epoch 内的发布顺序。正常追加 K 线不改变 datasetRevision；历史修正、分析起点、算法配置或分析用元数据变化会创建新代。

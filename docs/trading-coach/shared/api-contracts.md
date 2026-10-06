@@ -16,7 +16,7 @@
 
 采用契约优先：未来应用目录 `trading-coach/contracts/schemas/` 中的 JSON Schema 2020-12 是 HTTP / SSE 公共数据模型的唯一来源，`contracts/openapi.yaml` 使用 OpenAPI 3.1 定义 HTTP 路径并引用这些 schema。SSE 的 snapshot / update / status / reset payload 也各自拥有 schema，不依赖 Spring 对 `SseEmitter` 返回类型的自动推断。当前这些机器可读文件尚未创建，P0 根据本页落地。
 
-Java contracts 包用 record DTO 实现协议，Jackson 负责序列化，Jakarta Validation 和领域校验负责约束；Java 注解不是第二套协议来源。前端从同一 schema / OpenAPI 生成 TypeScript 类型和运行时校验器。CI 检查 schema 引用和生成产物无漂移，并验证 Java 实际 REST / SSE 输出、请求错误及固定 fixtures，防止 Java DTO 与协议脱节。
+Java 接口层 `interfaces.api.dto` 包用 record DTO 实现协议，`interfaces.api.mapper` 负责应用结果到协议的映射，Jackson 负责序列化，Jakarta Validation 和领域校验负责约束；Java 注解不是第二套协议来源。前端从同一 schema / OpenAPI 生成 TypeScript 类型和运行时校验器。CI 检查 schema 引用和生成产物无漂移，并验证 Java 实际 REST / SSE 输出、请求错误及固定 fixtures，防止 Java DTO 与协议脱节。
 
 实施工具建议：HTTP 类型使用 openapi-typescript；SSE 类型使用 json-schema-to-typescript；运行时使用 Ajv 的 JSON Schema 2020-12 支持并预编译 validator。先对 schema 做引用打包，再生成产物；P0 验证这些工具对 OpenAPI 3.1、nullable 和外部引用的兼容性。前端允许兼容版本的新增非必需字段，但必需字段、十进制字符串格式、枚举和时间单位必须校验；不要以忽略全部解析错误实现所谓兼容。
 

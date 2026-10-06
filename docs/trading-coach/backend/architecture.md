@@ -12,51 +12,168 @@ MVP 部署一个 Spring Boot JVM 实例、一个 SQLite WAL 数据库。单实�
 
 后端负责上游数据接入、归一化、收盘确认、技术计算、快照一致性和实时推送。应用只读公共行情，不需要交易账户、不接订单执行。Java 选型基于用户的 Android / Java 背景和长期维护需求。旧 Python 实现仅供数据源行为参考。
 
-## 2. 模块结构
+## 2. 分层架构与代码组织
+
+采用四层结构：接口层、应用层、领域层、基础设施层；另设启动装配入口。首版一个 Gradle 应用模块、一个部署单元，以 Java 包约束依赖；层不对应进程、线程或微服务。每层内部再按行情、图表、识别等职责组织，避免所有逻辑挤进一个 `Service`。
+
+### 2.1 每层负责什么
+
+| 层 / 包 | 负责 | 不负责 |
+| --- | --- | --- |
+| 接口层 `interfaces` | REST Controller、请求校验、HTTP / SSE DTO 映射、错误码、SseEmitter 与客户端连接生命周期 | 算法判定、SQL、直接修改 session 状态、决定提交顺序 |
+| 应用层 `application` | 组织查询、采集、对账、收盘处理和重建用例；协调版本、事务请求、快照发布；管理 ChartSession、ReadContext 和 StreamHub | 交易所 JSON 解析、JDBC 操作、HTTP 响应格式、具体 Swing / Breakout 规则 |
+| 领域层 `domain` | Candle、SeriesKey、规则配置等领域类型与不变量；TechnicalEngine、detector 和 Pattern 状态机；产生 nextState / 识别结果 | Spring、数据库、网络、队列调度、序列化、读取系统当前时间 |
+| 基础设施层 `infrastructure` | 实现应用层定义的外部依赖接口：OKX / Fixture、HTTP / WebSocket、JDBC、事务执行、migration、限流和指标接入 | 决定形态含义、绕过用例修改 canonical state、决定何时公开新代 |
+| 启动装配 `bootstrap` | Spring Boot 入口、配置绑定、Bean 装配、executor 配置、SmartLifecycle 启停顺序 | 业务判定和日常请求处理 |
+
+应用层保留纯 Java 用例和接口，通过构造器注入依赖，由 bootstrap 创建 Bean；不要求每个类都有接口。只有入口用例和需要替换的外部能力定义边界。领域计算所需时间、参数和元数据由调用者显式传入，确保回放可复现。
+
+### 2.2 依赖方向
+
+下面箭头表示**代码依赖 / import**，不表示行情流动方向：
+
+```mermaid
+flowchart TB
+    B["bootstrap：启动与装配"] --> I["interfaces：HTTP / SSE"]
+    B --> A["application：用例、端口、运行状态"]
+    B --> X["infrastructure：外部能力实现"]
+    I --> A
+    A --> D["domain：领域模型与纯算法"]
+    I -.->|仅映射值类型| D
+    X --> A
+    X --> D
+```
+
+- `domain` 只依赖 JDK；`application` 只依赖 JDK 和 domain，不导入 Spring、Jackson、JDBC 或其他外层包。
+- `interfaces` 通过 `application.port.in` 调用用例，以应用查询结果和事件作为输出；映射时可读取其中的 domain 值类型，不直接调用 detector 或取得可变 ChartSession。
+- `infrastructure` 实现 `application.port.out`，可使用 domain 类型，不依赖 interfaces；应用层运行时通过端口调用这些实现，源码不反向导入具体实现。
+- 其余层不依赖 bootstrap；interfaces 与 infrastructure 不互相调用。跨用例复用通过应用层协调组件完成，禁止形成循环依赖。
+
+例如，应用层声明 `SeriesCommitPort`，基础设施层的 `JdbcSeriesCommitter` 实现它，bootstrap 负责注入。运行时是“用例 → 端口 → JDBC 实现”，代码依赖仍指向应用层。更换 SQLite 或行情 provider 时，保留用例与领域规则。
+
+### 2.3 建议包结构
+
+以下为未来应用结构，不代表当前已存在这些 Java 文件：
 
 ```text
 trading-coach/backend/
   build.gradle / settings.gradle / gradlew / gradle/wrapper/
   src/main/java/com/tradingcoach/
-    TradingCoachApplication.java
-    config/               # 配置、线程执行器、Spring 依赖装配
-    api/                  # instruments、candles、chart、stream、patterns、watchlist、health
-    contracts/            # Java record DTO、请求校验、domain 映射；JSON 字段 camelCase
-    domain/               # Candle、Swing、Structure、Pattern、规则配置
-    marketdata/
-      adapters/           # MarketDataAdapter interface、OKX、Fixture；Binance 后续
-      CandleNormalizer.java / CandleValidator.java
-      Reconciler.java      # 历史 / 实时接续、断线补齐
-      Collector.java       # 上游连接与限流
-    technical/
-      SwingDetector.java / StructureDetector.java / LevelDetector.java
-      BreakoutDetector.java / PatternStateMachine.java / TechnicalEngine.java
-    sessions/
-      ChartSession.java   # 顺序处理、原子快照、seq / epoch
-      StreamHub.java      # ring buffer、有界客户端队列
-    repositories/         # Candle、Pattern、转换事件、规则版本
-    storage/              # JDBC 实现、schema migration、事务、单写入任务队列
-    observability/        # 结构化日志、健康状态、指标
+    bootstrap/
+      TradingCoachApplication.java  # 显式配置扫描 com.tradingcoach
+      config/                       # Bean、配置、executor 装配
+      lifecycle/                    # SmartLifecycle 调用启动 / 停止用例
+    interfaces/
+      api/
+        controller/                 # instruments、candles、chart、patterns、watchlist、health
+        dto/                        # record DTO、Jakarta Validation
+        mapper/                     # 应用结果 / 领域值 → HTTP / SSE DTO
+        error/                      # RestControllerAdvice、统一错误 envelope
+      stream/
+        StreamController.java
+        SseConnection.java          # SseEmitter、串行 sender、断开清理
+    application/
+      port/in/                      # 查询、订阅、采集启停等用例入口
+      port/out/                     # MarketDataAdapter、仓储读接口、SeriesCommitPort
+      model/                        # 命令、查询结果、事件、写入计划；无传输协议注解
+      query/                        # Chart / Candle / Pattern / Watchlist 查询用例
+      ingestion/                    # Collector、Reconciler、ProcessCandleUseCase
+      rebuild/                      # RebuildSeriesUseCase、任务有效性与版本切换
+      runtime/                      # ChartSession、ReadContextManager、StreamHub
+    domain/
+      model/                        # Candle、Instrument、SeriesKey、Swing、Pattern
+      validation/                   # OHLC、时间边界等与 provider 无关的不变量
+      technical/                    # TechnicalEngine、detector、PatternStateMachine
+      rules/                        # 固定规则配置、版本与参数
+    infrastructure/
+      marketdata/
+        okx/                        # OkxMarketDataAdapter、provider DTO、Normalizer
+        fixture/                    # FixtureMarketDataAdapter
+        transport/                  # JDK HttpClient / WebSocket、共享限流
+      persistence/
+        jdbc/                       # 仓储实现、SQL、数据库行映射
+        writer/                     # JdbcSeriesCommitter、单 writer、有界队列
+        migration/                  # schema migration 执行与校验
+      observability/                # 指标 / 日志接入，实现应用层观测端口
   src/main/resources/
     application.yml
-    db/migration/         # 编号 SQL 与 migration 版本 / 校验和
-  src/test/java/com/tradingcoach/   # JUnit：unit、contract、integration
+    db/migration/                   # 编号 SQL 与 migration 版本 / 校验和
+  src/test/java/com/tradingcoach/    # unit、contract、integration、包依赖检查
   src/test/resources/fixtures/
 ```
 
-domain / technical 不导入 Spring、api、storage、marketdata 或图表代码。DTO 转换集中在 contracts；Provider payload 不能直接进入算法。领域层价格采用 `BigDecimal`，HTTP / SSE DTO 使用十进制字符串；JSON Schema 是跨端协议来源，Java 序列化结果必须通过契约验证。
+`domain.technical` 表示算法的逻辑模块，首版不要求独立 Gradle 子模块。拆分构建模块应由实际复用或编译边界需要驱动，先保持目录、依赖规则和测试可执行。
 
-## 3. 服务职责
+### 2.4 模型、端口与状态的边界
 
-| 模块 | 输入 / 输出 | 关键约束 |
+| 边界 | 约定 |
+| --- | --- |
+| 外部行情 → 内部更新 | provider DTO 与字段映射留在 infrastructure；输出规范化更新，再由领域校验检查不变量。原始 JSON / JsonNode 不进入用例和算法 |
+| 内部结果 → 公共协议 | 应用结果由 interfaces mapper 转成 DTO；领域价格为 BigDecimal，HTTP / SSE 为十进制字符串。JSON Schema 仍是唯一协议来源 |
+| 内部结果 → 数据库 | SQL 行对象与行映射留在 infrastructure.persistence；不把 ResultSet、Connection 或数据库实体返回应用层 |
+| 仓储接口 → 仓储实现 | CandleRepository / PatternRepository 等读接口定义在 application.port.out，JDBC 实现在 infrastructure。接口显式接收代与查询边界；不提供任意 SQL 或不带版本的“最新记录”查询 |
+| 原子写入 → 事务执行 | 应用层提交不可变写入计划到 SeriesCommitPort；实现将 Candle、Swing、Pattern、transition、metadata 放在同一 writer 事务，不分别调用仓储提交 |
+| 运行状态 → 领域状态 | ChartSession、epoch、seq、ReadContext、缓存与队列归应用层；EngineState 和形态生命周期归领域层。领域层不管理订阅与网络连接 |
+| 逻辑事件 → SSE 发送 | StreamHub 归应用层，管理 session 的 ring、订阅、高水位、背压和逻辑队列；SseConnection 归接口层，负责序列化、send、心跳及连接清理 |
+
+SSE 的字节预算不能用事件个数替代。接口层提供无副作用的事件编码 / 计量实现，由 bootstrap 注入应用层定义的端口，入队前取得准确的 UTF-8 字节数；应用层只持有不可变事件和计量结果，不导入 Jackson / SseEmitter。实际发送复用同一编码规则。snapshot、补发副本和实时队列分别按契约计费。序列处理器在取得发布锁前准备包含候选 epoch / seq 的不可变事件并完成计量；发布时验证状态仍匹配，不匹配则重新准备，不能在持锁期间重新编码。编码和网络写入不得持有 session 发布锁。
+
+ReadContextManager 在应用层管理发布锁、版本与代引用；基础设施通过 `application.port.out` 中的读端口提供短期 `ReadSnapshot` 句柄，其类型不暴露 JDBC。建立数据库读取快照后才释放读许可，SQL 事务由实现关闭；HTTP / SSE 写出前已经释放句柄。不能只传 datasetRevision 再让每个 Repository 随意建立不同的读取快照，具体顺序见 [一致性设计](consistency-and-recovery.md#2-重建与原子发布)。
+
+### 2.5 两条关键调用链
+
+**查询图表 / 历史 / 详情：** Controller 校验请求并构造查询 → 应用查询用例取得 ReadContext → 读取该上下文的不可变快照或仓储读端口 → 结束短读事务与代引用 → 返回不可变应用结果 → mapper 转 DTO → HTTP 返回。缓存缺失时由用例组织受限回补并重新取得上下文，Controller 不直接请求交易所。
+
+**处理已收盘 K 线：** OKX Adapter 规范化更新并通知 Listener → Collector 投递序列有界队列 → Reconciler 对账 → ProcessCandleUseCase 调用领域引擎计算独立 nextState → 请求原子写入 → 提交成功才安装状态、快照与事件 → SSE sender 异步发送。
+
+```mermaid
+sequenceDiagram
+    participant U as 应用用例 / ChartSession
+    participant E as 领域 TechnicalEngine
+    participant P as SeriesCommitPort / JDBC writer
+    participant H as 应用 StreamHub
+    participant S as 接口层 SSE sender
+    U->>E: 前一状态 + 收盘 Candle + 固定规则
+    E-->>U: nextState + Swing / Pattern / transitions
+    Note over U,H: 准备不可变事件，完成字节计量
+    Note over U,P: 取得发布锁，校验候选版本与 seq
+    U->>P: 提交版本绑定的写入计划
+    P->>P: writer 线程内开启并提交一个事务
+    P-->>U: 提交确认
+    U->>U: 安装 nextState / snapshot / seq
+    U->>H: 登记已发布事件和订阅队列
+    Note over U,H: 完成原子发布，释放锁
+    H-->>S: 提供待发送事件
+    S->>S: 编码与 socket 写入
+```
+
+图中为成功路径；回滚时不安装 nextState、不发布结果，提交结果不明则进入恢复流程。用例决定“一次业务变更写哪些结果、何时公开”；基础设施保证“同一连接上原子提交”。`TransactionTemplate` 只在 writer 线程内执行，不能在 Controller 或异步投递方法上加 `@Transactional` 就认为任务已被同一事务覆盖。
+
+### 2.6 后续迭代与边界验收
+
+| 变化 | 主要修改位置 | 需要保持的边界 |
 | --- | --- | --- |
-| MarketDataAdapter | REST / WS → NormalizedCandleUpdate | 交易所字段、周期、成交量单位映射；无业务形态判断 |
-| Reconciler | 历史与实时 → 有序数据变更 | 去重、缺口补齐、closed 不退回 open、识别修正 |
-| CandleRepository | 校验 Candle → 缓存 / SQLite | 物理键为 instrument + timeframe + datasetRevision + openTime；查询绑定当前代 |
-| TechnicalEngine | 顺序收盘 Candle → 确认结果 | 纯逻辑；规则版本、参数固定；无未来数据 |
-| ChartSession | Candle / 技术结果 → ChartSnapshot | 每序列串行处理；同一事务逻辑生成原子视图 |
-| StreamHub | 快照 / 增量 → SSE | seq、epoch、ring buffer、有界队列、重同步 |
-| PatternRepository | 生命周期 → 查询结果 | 稳定 ID；相同转换幂等；保存证据 |
+| 新增识别形态 | domain.technical / rules，以及必要的契约和映射 | detector 不访问数据库 / 网络；同一 fixture 可离线回放 |
+| 新增交易所 | infrastructure.marketdata 的适配器与 bootstrap 装配 | 继续输出规范化更新，沿用应用层对账 / 发布流程 |
+| 更换数据库 | infrastructure.persistence、migration、bootstrap 配置 | 通过相同读端口和原子写端口，重新验证一致性与恢复 |
+| 新增 API / Android 客户端 | interfaces 与公共契约；需要新用例时扩展 application | 客户端沿用后端权威结果，不复制算法 |
+
+P0 建立包依赖检查，并接入 Gradle `check`：拒绝领域 / 应用层引用外部框架、Controller 引用仓储实现、跨层循环依赖。P1 的领域测试无需启动 Spring 或数据库；应用用例用 fake 端口验证提交失败不发布、旧重建任务不安装；JDBC 原子性和 SSE 慢客户端通过集成测试验证。上述检查是实施验收要求，目前尚未生成应用代码或测试。
+
+## 3. 服务职责与层级归属
+
+| 组件 | 所属层 | 输入 / 输出与关键约束 |
+| --- | --- | --- |
+| MarketDataAdapter | 应用层端口 / 基础设施层实现 | REST / WS → NormalizedCandleUpdate；字段、周期与单位映射，无形态判断 |
+| Collector / Reconciler | 应用层 | 连接 / 回补编排、去重与排序；closed 不退回 open，修正触发新代 |
+| CandleValidator | 领域层 | 规范化 Candle → 不变量校验；不解析 provider JSON |
+| CandleRepository / PatternRepository | 应用层读端口 / 基础设施层实现 | 在 ReadContext 的读取快照中查询固定代；稳定 ID、证据与历史分页 |
+| TechnicalEngine | 领域层 | 顺序收盘 Candle → nextState / 识别结果；固定规则，无未来数据 |
+| ProcessCandleUseCase / RebuildSeriesUseCase | 应用层 | 编排计算、原子写入、失败恢复和发布，禁止未提交结果进入公开快照 |
+| SeriesCommitPort / JdbcSeriesCommitter | 应用层写端口 / 基础设施层实现 | 不可变写入计划 → 一个 writer 事务 → 提交确认 |
+| ChartSession / ReadContextManager | 应用层 | 每序列串行状态、原子快照和统一版本读取入口 |
+| StreamHub | 应用层 | session 事件日志、ring、seq / epoch、有限队列与重同步；不写 socket |
+| Controller / mapper / SseConnection | 接口层 | 用例入口、协议映射、HTTP / SSE 发送和连接清理 |
 
 ## 4. 运行模型与启动
 
@@ -127,7 +244,7 @@ P0 的 DDL 必须落地复合主键、外键、每序列最多一个 ACTIVE 代�
 
 未收盘数据存内存，闭合后落库；重启重新从交易所获取未收盘 bar。Pattern provisional 只在内存，不进入 canonical 转换表。
 
-单序列收盘写入在一个 SQLite 事务中完成：Candle + Pattern + transition + metadata。成功后才更新权威快照并发布事件；失败时保留上一版，进入 degraded 状态，不能先广播后声称已持久化。
+单序列收盘写入在一个 SQLite 事务中完成：Candle + Swing + Pattern + transition + metadata。成功后才更新权威快照并发布事件；失败时保留上一版，进入 degraded 状态，不能先广播后声称已持久化。
 
 算法计算产生独立的 nextState 和待写结果，不提前修改 canonical state。由 writer 在线程内执行 `TransactionTemplate`，提交成功后 session 在锁内安装新状态 / 快照并推进 seq；回滚则丢弃 nextState，暂停后续确认推进并从最后提交位置重试。若提交结果不明或数据库已提交但内存安装失败，先读取已提交 metadata 并重建，再接受新事件，避免重复转换。进程重启重建并更换 epoch。
 
@@ -139,7 +256,7 @@ migration 在采集启动前独占执行，记录版本和校验和，失败时 
 
 REST 提供 instruments、历史分页、ChartSnapshot、Pattern Detail、Watchlist 和健康检查。SSE 推送一个序列的 Candle 与算法变化，协议见契约文档。
 
-- ChartSession 维护 boot/session epoch、递增 seq 和最近 512 个事件批次。
+- ChartSession 拥有 boot/session epoch 与递增 seq；由 StreamHub 管理该 session 最近 512 个事件批次。
 - 从 snapshot 到订阅之间通过 resume token 消除竞态；无法补齐时直接发完整快照。
 - 每客户端队列最多 128 个批次；队列溢出时断开该客户端，由重连 + snapshot 恢复，不无限堆积，也不阻塞 collector。
 - ring 同时限制 8 MiB，客户端实时队列同时限制 2 MiB。一次恢复最多补发 64 批 / 512 KiB，超过直接发完整快照；补发副本和实时队列独立计费，注册时划定 seq 高水位。细节见 [SSE 契约](../shared/api-contracts.md#9-sse)。

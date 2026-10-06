@@ -9,7 +9,7 @@
 | 文档 | 回答的问题 |
 | --- | --- |
 | [前端技术架构](frontend/architecture.md) | 页面、TypeScript 模块、图表适配、状态和实时更新如何组织 |
-| [后端技术架构](backend/architecture.md) | API、行情采集、算法运行、存储和部署如何组织 |
+| [后端技术架构](backend/architecture.md) | 四层职责、依赖方向、包结构、调用链，以及运行、存储和部署如何组织 |
 | [数据源设计与分支参考](backend/market-data-design.md) | 旧分支哪些设计可复用，首个市场如何接入 |
 | [前后端数据契约](shared/api-contracts.md) | Candle、Pattern、快照、REST 和 SSE 的统一语义 |
 | [技术识别规则](backend/technical-engine-spec.md) | Swing、结构、突破和状态机的规则与测试标准 |
@@ -39,6 +39,7 @@ Retest、Range 形态、Continuation、Reversal 为后续扩展，不阻塞首�
 | 图表 | TradingView Lightweight Charts，实施时锁定稳定主版本 | 只负责渲染；复杂标注由 Adapter / Primitive 完成 |
 | UI 样式 | CSS Modules + CSS 变量作为基础接口 | 暂不锁定组件库、配色或视觉风格 |
 | 后端 | Java 21 LTS、Spring Boot 4.1.x、Spring MVC、Jackson、Jakarta Validation | 用户已选定 Java，沿用 Android / Java 开发经验，降低长期维护和迭代成本 |
+| 后端分层 | 接口层 → 应用层 → 领域层；基础设施实现应用端口，启动入口负责装配 | 一个 Gradle 应用模块，通过包边界隔离协议、流程、规则与外部系统；见 [分层设计](backend/architecture.md#2-分层架构与代码组织) |
 | 构建 / 测试 | Gradle Wrapper、Java toolchain 21、JUnit | 版本在实施时锁定；测试框架版本跟随 Spring Boot 依赖管理 |
 | 算法归属 | 后端纯函数 / 状态引擎，后端输出权威结果 | 避免浏览器、Android 和服务端出现不同判定 |
 | 浏览器数据连接 | REST + SSE | 需求是单向推送，可复用已有分支设计 |
@@ -68,6 +69,8 @@ flowchart LR
     CLIENT --> CHART[Lightweight Charts Adapter]
     CLIENT --> DETAIL[Watchlist / Pattern Detail]
 ```
+
+上图表示运行时数据处理顺序；持久化由应用用例协调，Engine 不调用 Repository。代码依赖方向见 [后端分层](backend/architecture.md#22-依赖方向)。
 
 Technical Engine 是不依赖 Spring、数据库、网络或图表库的纯 Java 模块。前端 Chart Adapter 不参与突破判断；显示证据字段，并根据语义状态生成视觉标注。
 
@@ -105,6 +108,7 @@ P0/P1 可以用 fixture 先行，不依赖实时交易所连接。首个迭代�
 | 阶段 | 必需交付物 | 完成标准 |
 | --- | --- | --- |
 | P0 | `trading-coach/contracts/openapi.yaml`、`schemas/`、REST / SSE JSON fixtures | 引用可解析；TS 类型和运行时校验器可生成；Java 实际序列化通过相同 schema |
+| P0 | Java 四层包骨架、启动装配、包依赖检查 | Gradle `check` 拒绝反向依赖与循环依赖；领域 / 应用层不导入外部框架 |
 | P0 | `trading-coach/backend/src/main/resources/db/migration/` SQL、schema 兼容清单 | 临时 SQLite 能从零建库和逐版升级；复合键、外键、ACTIVE 指针和重复写入验证通过 |
 | P1 / P3 | 版本化规则配置与 golden fixtures：输入 Candle / 元数据、预期 Swing / Pattern / 转换 | 边界、两方向、逐根与批量、重启与元数据变化的结果可比；预期结果人工核验而非复制待测实现 |
 | P2 | 并发发布 / 分页 / SSE、队列上限与故障注入测试 | BUILDING 不可见、迟到响应被丢弃、慢客户端不阻塞采集、重建与写库失败可恢复 |

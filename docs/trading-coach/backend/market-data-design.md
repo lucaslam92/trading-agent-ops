@@ -69,6 +69,8 @@
 
 ## 4. Adapter 契约
 
+分层归属：`MarketDataAdapter`、Listener 和订阅接口定义在 `application.port.out`；OKX / Fixture 实现与 provider 字段归一化位于 `infrastructure.marketdata`。规范化更新使用内部应用 / 领域类型，不复用 HTTP DTO。Collector / Reconciler 位于应用层，协调回补和顺序处理；与交易所无关的 Candle 不变量校验位于领域层。依赖方向见 [后端分层](architecture.md#22-依赖方向)。
+
 ```java
 public interface MarketDataAdapter extends AutoCloseable {
     List<Instrument> listInstruments();
