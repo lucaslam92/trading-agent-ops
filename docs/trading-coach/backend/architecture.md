@@ -6,7 +6,7 @@
 
 ## 1. 技术选择与运行边界
 
-采用 Java 21 LTS、Spring Boot 4.1.x、Spring MVC、Jackson、Jakarta Validation、JDK HttpClient / WebSocket、Spring JDBC + Xerial SQLite JDBC。SSE 使用 Spring MVC `SseEmitter`。构建采用 Gradle Wrapper 和 Java toolchain 21；Gradle group 与 Java 根包统一使用 `com.marketaxiom`。实施时锁定兼容的补丁版本、Wrapper 和依赖，不使用动态版本。
+采用 Java 21 LTS、Spring Boot 4.1.x、Spring MVC、Jackson、Jakarta Validation、JDK HttpClient / WebSocket、Spring JDBC + Xerial SQLite JDBC。SSE 使用 Spring MVC `SseEmitter`。构建采用 Gradle Wrapper 和 Java toolchain 21；Gradle group 与 Java 根包统一使用 `com.marketinsight`。实施时锁定兼容的补丁版本、Wrapper 和依赖，不使用动态版本。
 
 MVP 部署一个 Spring Boot JVM 实例、一个 SQLite WAL 数据库。单实例内部运行 HTTP 请求、采集、序列处理、数据库写入和 SSE 发送任务；“单实例”不等于单线程。首版采用 Spring MVC + JDBC 的命令式模型，线程职责和队列边界见第 4 节。
 
@@ -58,9 +58,9 @@ flowchart TB
 ```text
 trading-coach/backend/
   build.gradle / settings.gradle / gradlew / gradle/wrapper/
-  src/main/java/com/marketaxiom/
+  src/main/java/com/marketinsight/
     bootstrap/
-      MarketAxiomApplication.java   # Spring Boot 入口，扫描整个根包
+      MarketInsightApplication.java # Spring Boot 入口，扫描整个根包
       config/                       # Bean、配置、executor 装配
       lifecycle/                    # SmartLifecycle 调用启动 / 停止用例
     interfaces/
@@ -98,13 +98,13 @@ trading-coach/backend/
   src/main/resources/
     application.yml
     db/migration/                   # 编号 SQL 与 migration 版本 / 校验和
-  src/test/java/com/marketaxiom/  # unit、contract、integration、包依赖检查
+  src/test/java/com/marketinsight/  # unit、contract、integration、包依赖检查
   src/test/resources/fixtures/
 ```
 
 `domain.technical` 表示算法的逻辑模块，首版不要求独立 Gradle 子模块。拆分构建模块应由实际复用或编译边界需要驱动，先保持目录、依赖规则和测试可执行。
 
-`Market Axiom` 表达“以稳定、可验证的基本规则理解市场结构”，比偏展示含义的命名更符合规则引擎、历史重放和证据解释的定位。`com.marketaxiom` 是代码命名空间，不替代对外产品名 Trading Coach。仓库目录、HTTP 路径和 JSON 字段不跟随 Java 包名变化；根包一经开始实现就保持稳定，不在业务子包中混用两个命名空间。
+`Market Insight` 表达“从市场数据中提炼可解释洞察”，既覆盖当前的结构识别、规则引擎和证据解释，也允许后续扩展其他分析能力。`com.marketinsight` 是代码命名空间，不替代对外产品名 Trading Coach。仓库目录、HTTP 路径和 JSON 字段不跟随 Java 包名变化；根包一经开始实现就保持稳定，不在业务子包中混用两个命名空间。
 
 ### 2.4 模型、端口与状态的边界
 
