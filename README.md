@@ -1,5 +1,7 @@
 # Trading Agent Ops
 
+新增 [Trading Coach MVP 技术设计](docs/trading-coach/README.md)：[前端](docs/trading-coach/frontend/architecture.md)、[后端](docs/trading-coach/backend/architecture.md)、[数据源参考](docs/trading-coach/backend/market-data-design.md)和[共享接口契约](docs/trading-coach/shared/api-contracts.md)。这是一条面向图表与交易学习的独立 MVP 路线，技术设计与原有 quant-claw 文档分别维护。
+
 一个面向量化交易 Agent 系统的项目文档仓库，当前重点围绕 `quant-claw` 这条 MVP 路线进行梳理、设计和沉淀。
 
 ## 当前目标
