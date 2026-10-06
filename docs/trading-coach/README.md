@@ -39,7 +39,7 @@ Retest、Range 形态、Continuation、Reversal 为后续扩展，不阻塞首�
 | 图表 | TradingView Lightweight Charts，实施时锁定稳定主版本 | 只负责渲染；复杂标注由 Adapter / Primitive 完成 |
 | UI 样式 | CSS Modules + CSS 变量作为基础接口 | 暂不锁定组件库、配色或视觉风格 |
 | 后端 | Java 21 LTS、Spring Boot 4.1.x、Spring MVC、Jackson、Jakarta Validation | 用户已选定 Java，沿用 Android / Java 开发经验，降低长期维护和迭代成本 |
-| Java 命名空间 | Gradle group 与根包统一使用 `com.marketlens` | 使用常规的 `com.项目名` 形式；产品名仍为 Trading Coach |
+| Java 命名空间 | Gradle group 与根包统一使用 `com.marketaxiom` | Market Axiom 表达“以稳定、可验证的规则理解市场结构”；产品名仍为 Trading Coach |
 | 后端分层 | 接口层 → 应用层 → 领域层；基础设施实现应用端口，启动入口负责装配 | 一个 Gradle 应用模块，通过包边界隔离协议、流程、规则与外部系统；见 [分层设计](backend/architecture.md#2-分层架构与代码组织) |
 | 构建 / 测试 | Gradle Wrapper、Java toolchain 21、JUnit | 版本在实施时锁定；测试框架版本跟随 Spring Boot 依赖管理 |
 | 算法归属 | 后端纯函数 / 状态引擎，后端输出权威结果 | 避免浏览器、Android 和服务端出现不同判定 |
