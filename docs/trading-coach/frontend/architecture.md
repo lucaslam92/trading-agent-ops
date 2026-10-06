@@ -13,7 +13,7 @@
 | REST 状态 | TanStack Query；历史分页和缓存 |
 | UI 状态 | Zustand；选择、标注开关、详情和连接状态 |
 | 图表 | Lightweight Charts；库调用集中于 ChartAdapter |
-| 契约 | Pydantic 导出的 OpenAPI / JSON Schema 生成 TS 类型和运行时校验器 |
+| 契约 | 统一 JSON Schema / OpenAPI 3.1 生成 TS 类型和运行时校验器；与 Java 后端共享协议来源 |
 | 样式 | CSS Modules + CSS 自定义变量；UI Kit 可替换 |
 | 验证 | Vitest、React Testing Library、Playwright |
 
@@ -79,10 +79,10 @@ trading-coach/frontend/
 | 状态 | 存放位置 | 规则 |
 | --- | --- | --- |
 | instrument / timeframe | URL | URL 为选择的唯一入口，store 派生 |
-| 历史分页 | Query cache | key 包含 instrument、周期、cursor、数据版本 |
+| 历史分页 | Query cache | key 包含 instrument、周期、epoch、datasetRevision、范围 / cursor；与 live 集合分开 |
 | 当前权威图表快照 | ChartSessionStore | epoch + seq + datasetRevision，整体替换或合法增量 |
 | 实时最新 Candle | ChartSessionStore | 按 openTime upsert，不复制进多套 store |
-| 详情选择 / 开关 | UI store | 不影响后端算法结果 |
+| 详情选择 / 开关 / 视口 | UI store | 视口以 from/to 时间保存；不改变服务端公共实时窗口 |
 | 主题 / 偏好 | PreferencesStore + localStorage | schema 版本化；不存权威 Pattern |
 | 图表实例 | React ref | 不放入可序列化 store |
 
@@ -98,6 +98,17 @@ REST 缓存提供请求复用，实时图表只订阅 ChartSessionStore。合并
 6. 新快照完成前不把新选择的增量应用到旧图。
 
 即使浏览器取消请求失败，generation 检查仍阻止旧响应覆盖新图。新 epoch 的快照是完整替换，seq 不能跨 epoch 比较。
+
+### 历史浏览和版本切换
+
+服务端 `/chart` / SSE 始终提供最近最多 500 根的公共 liveWindow。前端分别保存 live 集合与按范围分页的历史集合；渲染时按 openTime / ID 合并，当前 live 值覆盖同版本历史缓存中的重叠值。客户端缩放和滚动不修改服务端订阅范围，不影响其他客户端。
+
+1. 拖到历史区时，用当前 snapshot 的 epoch / datasetRevision 请求 `/candles` 和 `/annotations`，请求携带 selectionGeneration 与视口请求标识。标注按 nextCursor 取完，hasMore 与 coverage.isFullyCovered 分别处理。
+2. 收到 candleRemovals / swingRemovals / patternRemovals / annotationRemovals 仅从 live 集合移除。历史页仍按版本保留；若退出 live 的对象与当前历史视口相交，将该历史页失效后重取，以免恢复过期状态。provisional 从不进入历史页。
+3. 收到 reset 或 HTTP 409 时，保留视口时间范围、显示偏好和选择，取消请求并清空旧 epoch / datasetRevision 的数据。先安装新 snapshot，再按新版本重取原视口；旧 HTTP 响应即使成功也丢弃。
+4. 新代找不到之前选中的 Pattern 时关闭详情并说明结果已重新计算。历史数据耗尽时提示可用范围，不把缩放和滚动位置无条件跳回最新。
+
+每个 Chart 页面最多缓存 10,000 根 Candle、20,000 条标注、5,000 个 Swing；优先保留当前视口和 live 集合，淘汰最远的历史页。视口最多显示 2,000 根；超出时提示缩小范围，不通过遗漏数据假装完整。移出缓存后允许重新分页加载。限制与 [服务端资源预算](../backend/operations.md#1-资源预算与超时) 对齐。
 
 ## 6. 图表适配层
 
@@ -133,6 +144,10 @@ interface ChartAdapter {
 - 已断线继续显示最后图表与时间，暂停标为实时；不切成随机 mock。
 - 如果 seq 不连续，停止应用后续增量并重建 snapshot。
 
+行情状态和识别处理状态分别展示。行情徽标沿用上述连接状态；识别徽标使用 `quality.processing`：WARMING_UP 显示“历史准备中”，REBUILDING 显示“重新计算中，当前为旧版结果”，DEGRADED 显示“识别暂停”及原因和最后处理收盘时间。行情持续到达不能覆盖算法失败提示；READY 时显示“识别更新至…”。lastSuccessfulProcessAt 用于诊断，不代替行情时间。
+
+reset 是不带 SSE id 的控制帧，进入等待快照状态；其后 snapshot 即使 seq=0 也必须安装。原生 EventSource 自动重连使用 Last-Event-ID；主动新建连接使用最后已应用 token。连续 3 次重连没有进展则重新获取 chart，重试间隔采用 1–30 秒指数退避与 jitter；等待状态明确展示，不能无限快速重连。
+
 ## 8. UI 样式未定时的设计
 
 ChartTheme 规定语义 token：上涨/下跌、候选/形成/确认/失效、支撑/阻力、背景/文字/网格。ThemeAdapter 将 CSS 变量映射为图表选项。
@@ -145,6 +160,8 @@ ChartTheme 规定语义 token：上涨/下跌、候选/形成/确认/失效、�
 
 - 类型检查、lint、生产构建。
 - reducer：重复、乱序、seq 缺口、epoch 改变、选择切换竞态。
+- 两个客户端不同历史视口、live 移除不删历史、版本切换后保留视口并丢弃迟到响应、历史标注分页和缓存淘汰。
+- 行情 CONNECTED 与识别 DEGRADED 同时出现；reset 后 seq=0 snapshot 安装；64 / 65 / 512 批恢复分支。
 - Adapter：时间转换、历史 prepend 后可视区、卸载释放。
 - 集成：标的和六个周期切换、OHLC、Volume、详情证据、断线提示。
 - E2E：历史 snapshot → SSE candle update → breakout confirmation → 点击详情。

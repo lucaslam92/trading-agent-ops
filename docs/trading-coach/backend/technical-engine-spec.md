@@ -12,6 +12,7 @@
 - 以 bar.closeTime 作为 canonical evaluatedAt；firstSeenAt 单独记录系统实际发现时间。
 - 先用 bar 开始前已知关键位判断该 bar 的突破，再确认新的 Swing / Structure。新确认 Swing 不能用于解释此前的突破。
 - 未收盘 preview 从最近 canonical state 的副本计算，不能修改 canonical state。
+- 每一分析代固定 instrumentMetadataVersion；输入行情、规则配置、分析起点与元数据共同决定结果。处理状态不是 READY 时暂停 preview 和确认推进，重建仅在独立状态上执行。
 
 ## 2. 默认参数
 
@@ -29,7 +30,9 @@
 | formingExpiryBars | 3 | 形成阶段最多等待的收盘 bar 数 |
 | observationBars | 10 | 确认后继续观察失效的 bar 数 |
 
-所有 bps 使用 Decimal：1 bps = 0.0001。tickSize 来自 Instrument。阈值以 tick 向外取整：向上突破/向上确认阈值 ceiling，向下 floor；失效位也按方向向外取整。参数采用规范化 JSON 计算 parametersHash。
+所有价格、成交量和 bps 使用 Java `BigDecimal`：1 bps = 0.0001，从十进制字符串构造，不经 float / double 中转。tickSize 来自本分析代固定的 Instrument 元数据版本，不能在运行中替换。阈值以 tick 向外取整：向上突破/向上确认阈值使用 `RoundingMode.CEILING`，向下使用 `RoundingMode.FLOOR`；失效位也按方向向外取整。实现为阈值除以 tickSize、按方向取整数，再乘回 tickSize，不能仅按小数位数 setScale。
+
+数值比较使用 `compareTo`，不使用区分 scale 的 `equals` 判断价格相等。参数采用字段顺序固定的规范化 JSON 计算 parametersHash，十进制参数统一为 `stripTrailingZeros().toPlainString()` 的字符串表示，避免 `1.0` 与 `1.00` 产生不同规则版本。成交量过滤用 `currentVolume × 窗口长度 > 历史成交量之和 × multiplier` 等价比较，避免均值除法的舍入改变阈值；任何其他除法须显式定义 scale / 舍入规则并加入边界测试。
 
 ## 3. Swing Detector
 
@@ -40,9 +43,9 @@
 - 第 i+R 根收盘后才能确认。pivotTime 为 bar i 的 openTime，confirmedAt 为 bar i+R 的 closeTime。
 - 相等极值平台不产生 Swing，避免凭任意 tie-break 选择峰谷；未来若支持平台识别，升级规则版本。
 - 同一根 outside bar 同时满足高/低条件时两个 Swing 都保留，类型区分，不凭 OHLC 推测盘中先后。
-- 保留每个已确认 Swing，不因出现更高/更低同类点删除旧点。
+- 已确认 Swing 持久化保留，不因出现更高/更低同类点删除旧点；引擎内存仅保留计算所需近期点、活跃 anchor 和公共 liveWindow，历史查询从仓库分页读取。
 
-ID：hash(seriesKey、engineVersion、parametersHash、pivotTime、type)。已确认点在相同数据版本内不可改写。
+ID：hash(seriesKey、engineVersion、parametersHash、instrumentMetadataVersion、pivotTime、type)。已确认点在相同数据版本内不可改写。
 
 ## 4. 市场结构
 
@@ -88,7 +91,7 @@ ID：hash(seriesKey、engineVersion、parametersHash、pivotTime、type)。已�
 
 成交量过滤开启时额外要求：`currentClosedVolume > mean(previous 20 closed volumes) × 1.5`。不含当前 bar，不使用 quote/base 混合单位。历史不足或均量为零不能通过过滤，返回明确 reason；关闭过滤时不显示 volumeRatio 作为确认依据。
 
-每个 anchorSwingId + direction + ruleConfig 最多一个 canonical Breakout。失败或过期不重新创建相同 anchor 的候选；等待新 Swing。Retest 属于后续独立 Pattern，不复活原突破。
+每个 anchorSwingId + direction + ruleConfig + instrumentMetadataVersion 最多一个 canonical Breakout。失败或过期不重新创建相同 anchor 的候选；等待新 Swing。Retest 属于后续独立 Pattern，不复活原突破。
 
 ## 7. 生命周期
 
@@ -139,7 +142,7 @@ INVALIDATED / EXPIRED / COMPLETED 是终止状态，设置 endTime。COMPLETED �
 
 ## 9. 可解释输出
 
-每个 Pattern 至少包含：anchorSwingId、level、buffer、判定 Candle、收盘价、方向、结构化确认/失效条件、规则版本、reasonCodes 和 canonical 状态历史。
+每个 Pattern 至少包含：anchorSwingId、level、buffer、判定 Candle、收盘价、方向、结构化确认/失效条件、规则版本、instrumentMetadataVersion、reasonCodes 和 canonical 状态历史。
 
 建议 reasonCodes：`NEAR_RESISTANCE / NEAR_SUPPORT / WICK_ABOVE_THRESHOLD / WICK_BELOW_THRESHOLD / CLOSE_ABOVE_BUFFERED_RESISTANCE / CLOSE_BELOW_BUFFERED_SUPPORT / VOLUME_FILTER_PASSED / INSUFFICIENT_VOLUME_HISTORY / FAILED_BREAKOUT / CLOSE_BEYOND_INVALIDATION / CANDIDATE_EXPIRED / FORMING_EXPIRED / LEVEL_SUPERSEDED / OBSERVATION_COMPLETED / INSUFFICIENT_SWINGS / AMBIGUOUS_OUTSIDE_BAR / MIXED_STRUCTURE / EQUAL_SWING_RANGE`。
 
@@ -155,12 +158,14 @@ INVALIDATED / EXPIRED / COMPLETED 是终止状态，设置 endTime。COMPLETED �
 | HH/HL、LH/LL、equal、混合 | 分别得到 UP、DOWN、RANGE、UNKNOWN |
 | 同 bar 新 Swing 与突破 | 只允许使用该 bar 开始前已知的关键位 |
 | 向上 / 向下、阈值相等、跳空 | 严格双向规则和边界结果正确 |
+| BigDecimal scale、非 10 的幂的 tickSize、参数规范化 | `1.0` / `1.00` 数值一致；如 tickSize=0.05 正确向外取整；等价参数 hash 一致 |
 | wick 越界但收盘返回 | canonical 形成后失败，不确认 |
 | volume 关闭 / 不足 / 为零 / 通过 | reason 和结果与配置一致 |
 | 候选超时、形成超时、确认失效、观察结束 | 终止状态、bar 计数和条件优先级正确 |
 | 重复闭合 bar | Pattern ID / 转换数不增加 |
 | 批量历史 vs 逐根收盘 | 同一 analysis 起点、配置和数据的 canonical 结果相同 |
 | 未收盘多次更新 | 只改变 preview，不提前改变确认结果 |
-| 数据修正 / 重启 | 同一规则重建可复现；新 revision 不混用旧结果 |
+| 数据修正 / 重启 | 同一规则和元数据重建可复现；新 revision 不混用旧结果 |
+| 元数据变化 | 旧代 tickSize 固定；明确采用新版本后创建新代并重算，旧任务不能覆盖新结果 |
 
 使用手工构造的小 OHLCV 序列作为 golden fixtures，覆盖边界；再用明确来源的真实样本做对照。首版不以回测收益作为识别正确性的证据。
